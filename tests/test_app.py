@@ -15,7 +15,7 @@ SAMPLE_TERMS = {
     "Cell": "The basic unit of life.",
     "Mitochondria": "Organelle that produces energy for the cell.",
     "Osmosis": "Movement of water across a membrane.",
-    "Photosynthesis": "Process plants use to turn light into food,",
+    "Photosynthesis": "Process plants use to turn light into food, which continues on this wrapped line.",
     "Enzyme": "A protein that speeds up a reaction.",
 }
 DEFINITION_TO_TERM = {d: t for t, d in SAMPLE_TERMS.items()}

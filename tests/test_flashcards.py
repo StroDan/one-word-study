@@ -22,12 +22,14 @@ FIXTURES = Path(__file__).parent / "fixtures"
 SAMPLE = FIXTURES / "sample.pdf"
 NO_TERMS = FIXTURES / "no_terms.pdf"
 SCANNED = FIXTURES / "scanned.pdf"
+SLIDES = FIXTURES / "slides.pdf"
+GLOSSARY = FIXTURES / "glossary.pdf"
 
 SAMPLE_CARDS = [
     Card("Cell", "The basic unit of life."),
     Card("Mitochondria", "Organelle that produces energy for the cell."),
     Card("Osmosis", "Movement of water across a membrane."),
-    Card("Photosynthesis", "Process plants use to turn light into food,"),
+    Card("Photosynthesis", "Process plants use to turn light into food, which continues on this wrapped line."),
     Card("Enzyme", "A protein that speeds up a reaction."),
 ]
 
@@ -86,8 +88,17 @@ def test_R4_colon_line_is_card():
     assert parse_line("Cell: The basic unit of life.") == Card("Cell", "The basic unit of life.")
 
 
-def test_R4_colon_without_space_is_card():
-    assert parse_line("Cell:The basic unit") == Card("Cell", "The basic unit")
+def test_R4_colon_without_space_after_is_not_card():
+    # Changed in R4: a colon only separates when whitespace follows it.
+    assert parse_line("Cell:The basic unit") is None
+
+
+def test_R4_space_before_colon_is_still_allowed():
+    assert parse_line("Cell : The basic unit") == Card("Cell", "The basic unit")
+
+
+def test_R4_time_with_colon_is_not_card():
+    assert parse_line("Mondays 2:30-5:00 pm Josh Cray") is None
 
 
 def test_R4_spaced_hyphen_line_is_card():
@@ -130,18 +141,96 @@ def test_R4_whitespace_inside_parts_is_collapsed():
     assert parse_line("  Big   word :  a   long  meaning ") == Card("Big word", "a long meaning")
 
 
-def test_R4_wrapped_continuation_line_is_ignored():
-    text = "Photosynthesis: Process plants use,\nwhich continues here."
-    assert parse_cards(text) == [Card("Photosynthesis", "Process plants use,")]
+def test_R4_term_must_start_with_capital_letter():
+    assert parse_line("constrained: that is, limited by workers") is None
 
 
-def test_R4_heading_like_line_still_becomes_card():
-    assert parse_line("Chapter 3: Cells") == Card("Chapter 3", "Cells")
+def test_R4_term_of_four_words_is_card():
+    assert parse_line("Bank for International Settlements: A bank") == Card(
+        "Bank for International Settlements", "A bank"
+    )
+
+
+def test_R4_term_of_five_words_is_not_card():
+    assert parse_line("Quantity demanded falls when price – the law of demand") is None
+
+
+@pytest.mark.parametrize("line", ["Chapter 3: Cells", "September 14 - November 17"])
+def test_R4_term_ending_with_number_is_not_card(line):
+    assert parse_line(line) is None
+
+
+def test_R4_heading_like_line_without_number_still_becomes_card():
+    assert parse_line("Chapter three: Cells") == Card("Chapter three", "Cells")
+
+
+def test_R4_question_definition_is_not_card():
+    assert parse_line("Labor markets – how are wages set?") is None
+
+
+def test_R4_question_is_checked_after_R7_continuation():
+    assert parse_cards("Big question: what happens\nwhen prices rise?") == []
 
 
 def test_R4_exact_duplicates_kept_once():
     text = "Cell: Unit of life\ncell :  unit of  life\nCell: Something else"
     assert parse_cards(text) == [Card("Cell", "Unit of life"), Card("Cell", "Something else")]
+
+
+# ---------- R7: definitions that continue onto the next lines ----------
+
+def test_R7_lowercase_lines_continue_the_definition():
+    text = "Supply – the amount sellers\nare willing to sell,\nholding other things equal."
+    assert parse_cards(text) == [
+        Card("Supply", "the amount sellers are willing to sell, holding other things equal.")
+    ]
+
+
+def test_R7_capitalized_line_ends_the_definition():
+    text = "Demand – the amount buyers want\nDemand and Elasticity\nmore text"
+    assert parse_cards(text) == [Card("Demand", "the amount buyers want")]
+
+
+def test_R7_blank_line_ends_the_definition():
+    text = "Inflation: A rise in prices\n   \nand this is not part of it"
+    assert parse_cards(text) == [Card("Inflation", "A rise in prices")]
+
+
+@pytest.mark.parametrize("bullet", ["•", "-", "*"])
+def test_R7_bullet_line_ends_the_definition(bullet):
+    text = f"Supply – the amount sellers sell\n{bullet} also a separate point"
+    assert parse_cards(text) == [Card("Supply", "the amount sellers sell")]
+
+
+def test_R7_new_card_line_starts_a_new_card():
+    text = "Cell: the unit of life\nAtom: the unit of matter"
+    assert parse_cards(text) == [Card("Cell", "the unit of life"), Card("Atom", "the unit of matter")]
+
+
+def test_R7_continuation_whitespace_is_collapsed():
+    text = "Cell: the   unit\n   of    life"
+    assert parse_cards(text) == [Card("Cell", "the unit of life")]
+
+
+def test_R4_R7_slides_style_pdf():
+    cards, message = cards_from_pdf(SLIDES)
+    assert message is None
+    assert cards == [
+        Card("Supply", "the amount of a good that sellers are willing and able to sell "
+                       "at each price, holding other things equal."),
+        Card("Demand", "the amount buyers want at each price"),
+        Card("Price elasticity", "how much quantity responds to a change in price"),
+    ]
+
+
+def test_R4_R7_glossary_style_pdf():
+    cards, message = cards_from_pdf(GLOSSARY)
+    assert message is None
+    assert cards == [
+        Card("Budget Deficit", "The amount by which spending is greater than revenue in one year."),
+        Card("Inflation", "A general rise in prices. It lowers what money can buy."),
+        Card("Opportunity Cost", "The value of the next best choice not taken."),
+    ]
 
 
 # ---------- R5: answer checking ----------

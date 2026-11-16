@@ -48,14 +48,47 @@ def text_pdf(lines: list[str]) -> bytes:
 
 SAMPLE_LINES = [
     "Unit 4 Biology Review",
+    "self-esteem is not a card because the hyphen has no spaces",
     "Cell: The basic unit of life.",
     "Mitochondria - Organelle that produces energy for the cell.",
     "Osmosis – Movement of water across a membrane.",
-    "self-esteem is not a card because the hyphen has no spaces",
     "Photosynthesis: Process plants use to turn light into food,",
     "which continues on this wrapped line.",
     "• Enzyme: A protein that speeds up a reaction.",
     "This sentence has no separator at all.",
+]
+
+# Lecture-slide style (made up): "• Term – definition", lowercase definitions that wrap
+# over several lines, and lines that look like cards but are not (R4, R7).
+SLIDES_LINES = [
+    "Unit 2 Markets and Prices",
+    "• Office hours",
+    "• Mondays 2:30-5:00 pm Room 6200",
+    "• Supply – the amount of a good that sellers",
+    "are willing and able to sell at each price,",
+    "holding other things equal.",
+    "Demand and Elasticity",
+    "• Demand – the amount buyers want at each price",
+    "• Price elasticity – how much quantity responds",
+    "to a change in price",
+    "• Labor markets – how are wages set?",
+    "• Quantity demanded falls when price rises – the law of demand",
+    "• September 14 - November 17",
+]
+
+# Glossary style (made up): "Term:  Definition" with capital-letter definitions,
+# continuation lines, and a blank line (a single space) between entries (R4, R7).
+GLOSSARY_LINES = [
+    "Glossary of Terms",
+    " ",
+    "Budget Deficit:  The amount by which spending is greater than revenue",
+    "in one year.",
+    " ",
+    "Inflation:  A general rise in prices.  It lowers what money can buy.",
+    "Someone on a fixed income loses purchasing power.",
+    " ",
+    "Opportunity Cost:  The value of the next best choice not taken.",
+    "Because every choice uses limited resources, something is given up.",
 ]
 
 NO_TERMS_LINES = [
@@ -69,6 +102,8 @@ def main() -> None:
     FIXTURES.mkdir(exist_ok=True)
     (FIXTURES / "sample.pdf").write_bytes(text_pdf(SAMPLE_LINES))
     (FIXTURES / "no_terms.pdf").write_bytes(text_pdf(NO_TERMS_LINES))
+    (FIXTURES / "slides.pdf").write_bytes(text_pdf(SLIDES_LINES))
+    (FIXTURES / "glossary.pdf").write_bytes(text_pdf(GLOSSARY_LINES))
     blank = PdfWriter()
     blank.add_blank_page(width=612, height=792)  # stands in for a scanned page
     with open(FIXTURES / "scanned.pdf", "wb") as fh:

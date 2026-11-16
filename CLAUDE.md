@@ -2,7 +2,7 @@
 
 CSC299 final project: a local Flask app that turns a PDF into flash cards and a quiz.
 
-- Source of truth: `problem.md` (requirements R1–R6). Detailed behavior: `spec.md`.
+- Source of truth: `problem.md` (requirements R1–R7; R4 was changed, see its note). Detailed behavior: `spec.md`.
   If they disagree or something is unclear, ask the owner before coding.
 - Python 3.12 only, in `.venv` (create it with `/opt/homebrew/bin/python3.12 -m venv .venv`).
   The system `python3` is 3.9 and too old.

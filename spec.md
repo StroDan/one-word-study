@@ -1,6 +1,6 @@
-# One Word Study — Specification (round 1)
+# One Word Study — Specification
 
-Source of truth: `problem.md`. This file turns requirements R1–R6 into
+Source of truth: `problem.md`. This file turns requirements R1–R7 into
 precise, testable behavior. Decisions marked *(clarified)* were confirmed
 with the project owner before coding.
 
@@ -50,19 +50,46 @@ The PDF text is split into lines. For each line:
 1. Leading and trailing whitespace is removed. A leading bullet marker
    (`•`, `◦`, `▪`, `*`, `-`, `–`, `—` followed by a space) is removed.
 2. The separator is the **earliest** occurrence in the line of:
-   - a colon `:` (spaces around it are optional), or
+   - a colon `:` **followed by whitespace** (spaces before it are optional).
+     *(changed with R4)* A colon with no space after it, as in `2:30` or
+     `Cell:The unit`, is not a separator.
    - *(clarified)* a dash with whitespace on **both** sides: ` - `, ` – `
      (en dash), or ` — ` (em dash). A hyphen inside a word, as in
      `self-esteem`, is never a separator.
 3. The term is the text before the separator and the definition is the
    text after it. Runs of whitespace inside each are collapsed to one
    space. If either part is empty, the line is not a card.
-4. *(clarified)* Only the matching line is used. Lines that continue a
-   wrapped definition are ignored.
-5. *(clarified)* No heading filter: any line matching the pattern is a
-   card, including lines like `Chapter 3: Cells`.
-6. Exact duplicate cards (same term and definition, ignoring case and
+4. *(changed with R4)* The term must:
+   - start with a capital letter,
+   - have 4 words or fewer, and
+   - not end with a digit (so `Chapter 3: Cells` and
+     `September 14 - November 17` are not cards).
+5. *(changed with R4)* The definition must not end with `?`. This is
+   checked on the full definition, after R7 has added any continuation
+   lines.
+6. *(clarified)* No other heading filter: a line like
+   `Chapter three: Cells` is still a card.
+7. Exact duplicate cards (same term and definition, ignoring case and
    spacing) are kept only once, at the first occurrence.
+
+## R7 — Definitions that continue onto the next lines
+
+After a card line, each following line is added to the definition
+(separated by one space, with its inner whitespace collapsed) while the
+line:
+
+- starts with a lowercase letter (after leading whitespace), and
+- is not empty or whitespace only, does not start with a bullet marker
+  from R4 step 1, and is not itself a card line under R4.
+
+The first line that fails any of these ends the definition. So a
+capitalized line (often the next slide's title, or a new sentence in a
+glossary) ends it.
+
+Known limit: a lowercase line that is not part of the definition (for
+example a sentence that happens to start lowercase) is still added.
+Telling those apart would need language understanding, which the
+project does not use.
 
 ## R5 — Quiz questions and answer checking
 

@@ -146,8 +146,9 @@ def test_R5_wrong_answer_shows_correct_term(client):
     upload(client, "sample.pdf")
     term = DEFINITION_TO_TERM[current_definition(client)]
     text = page(client.post("/quiz", data={"answer": "definitely wrong"}))
-    assert "Not quite." in text
-    assert f"The correct answer is: {term}" in text
+    visible = re.sub(r"<[^>]+>", "", text)
+    assert "Not quite." in visible
+    assert f"The correct answer is: {term}" in visible
 
 
 def test_R5_wrong_answers_lower_the_score(client):

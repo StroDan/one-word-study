@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Quiz</h1>
+{% if done %}
+  <p class="definition">{{ score }} / {{ total }} correct</p>
+  <form action="/quiz/restart" method="post"><button type="submit">Start again</button></form>
+{% else %}
+  <p class="muted">Question {{ number }} of {{ total }} &middot; Score {{ score }}</p>
+  <p>Which term matches this definition?</p>
+  <p class="definition">{{ card.definition }}</p>
+  {% if feedback is none %}
+    <form action="/quiz" method="post">
+      <p><input type="text" name="answer" autocomplete="off" autofocus aria-label="Your answer"></p>
+      <p><button type="submit">Check</button></p>
+    </form>
+  {% else %}
+    {% if feedback.correct %}
+      <p class="good">Correct!</p>
+    {% else %}
+      <p class="bad">Not quite.</p>
+      <p>You wrote: <em>{{ feedback.answer or "(nothing)" }}</em></p>
+      <p>The correct answer is: <strong>{{ card.term }}</strong></p>
+    {% endif %}
+    <form action="/quiz/next" method="post">
+      <button type="submit" autofocus>{{ "See score" if number == total else "Next" }}</button>
+    </form>
+  {% endif %}
+{% endif %}
+{% endblock %}

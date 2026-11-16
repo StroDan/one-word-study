@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Make flash cards from a PDF</h1>
+<p class="muted">Upload one PDF of your unit. Lines written as <code>Term: definition</code>
+or <code>Term - definition</code> become flash cards and a quiz.</p>
+{% if message %}<p class="message" role="alert">{{ message }}</p>{% endif %}
+<form action="/upload" method="post" enctype="multipart/form-data">
+  <p><input type="file" name="pdf" accept=".pdf,application/pdf" required></p>
+  <p><button type="submit">Make cards</button></p>
+</form>
+{% endblock %}

@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Flash cards</h1>
+<p class="muted">{{ cards|length }} card{{ "" if cards|length == 1 else "s" }} from {{ filename }}.
+Click a card to flip it.</p>
+<p><a href="/quiz">Start the quiz &rarr;</a></p>
+<div class="grid">
+  {% for card in cards %}
+  <button type="button" class="flash" onclick="this.classList.toggle('flipped')">
+    <div class="front">{{ card.term }}</div>
+    <div class="back">{{ card.definition }}</div>
+  </button>
+  {% endfor %}
+</div>
+{% endblock %}

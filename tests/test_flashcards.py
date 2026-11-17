@@ -173,7 +173,9 @@ def test_R4_question_is_checked_after_R7_continuation():
 
 
 def test_R4_exact_duplicates_kept_once():
-    text = "Cell: Unit of life\ncell :  unit of  life\nCell: Something else"
+    # Second line differs only in capitals and spacing. (Its term must start with a
+    # capital letter now, or R4 rejects it and R7 joins it to the first definition.)
+    text = "Cell: Unit of life\nCELL :  unit of  life\nCell: Something else"
     assert parse_cards(text) == [Card("Cell", "Unit of life"), Card("Cell", "Something else")]
 
 

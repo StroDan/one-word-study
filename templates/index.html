@@ -1,11 +1,74 @@
 {% extends "base.html" %}
+{% block styles %}
+    .hero { text-align: center; margin: 8px auto 28px; max-width: 640px; }
+    .hero p { font-size: 18px; }
+    .drop {
+      position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px;
+      padding: 40px 20px; border: 2px dashed var(--line); border-radius: var(--radius);
+      background: var(--surface-2); text-align: center; cursor: pointer;
+      transition: border-color .15s, background .15s;
+    }
+    .drop:hover, .drop.dragging { border-color: var(--accent); background: var(--accent-soft); }
+    .drop .icon {
+      width: 52px; height: 52px; border-radius: 14px; display: grid; place-items: center;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #fff;
+      font-size: 24px; margin-bottom: 6px; box-shadow: var(--shadow);
+    }
+    .drop strong { font-size: 17px; }
+    .drop .file-name { font-weight: 600; color: var(--accent); min-height: 1.5em; }
+    /* The real input stays in the page (keyboard and screen readers use it) but is invisible. */
+    .drop input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+    .actions { display: flex; justify-content: center; margin-top: 20px; }
+    .steps {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px;
+      margin-top: 40px;
+    }
+    .step { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+    .step .num {
+      width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center;
+      background: var(--accent-soft); color: var(--accent); font-weight: 700; font-size: 14px; margin-bottom: 8px;
+    }
+    .step p { margin: 0; font-size: 14px; }
+{% endblock %}
 {% block content %}
-<h1>Make flash cards from a PDF</h1>
-<p class="muted">Upload one PDF of your unit. Lines written as <code>Term: definition</code>
-or <code>Term - definition</code> become flash cards and a quiz.</p>
-{% if message %}<p class="message" role="alert">{{ message }}</p>{% endif %}
-<form action="/upload" method="post" enctype="multipart/form-data">
-  <p><input type="file" name="pdf" accept=".pdf,application/pdf" required></p>
-  <p><button type="submit">Make cards</button></p>
-</form>
+<section class="hero">
+  <span class="eyebrow">Study smarter</span>
+  <h1>Turn your unit PDF into flash cards in seconds</h1>
+  <p class="muted">Upload one PDF of your unit. Lines written as <code>Term: definition</code>
+  or <code>Term - definition</code> become flash cards and a quiz.</p>
+</section>
+
+<div class="narrow">
+  {% if message %}<p class="message" role="alert">{{ message }}</p>{% endif %}
+  <form action="/upload" method="post" enctype="multipart/form-data" class="panel">
+    <label class="drop" id="drop">
+      <span class="icon" aria-hidden="true">&#8679;</span>
+      <strong>Drop your PDF here</strong>
+      <span class="muted">or click to browse &middot; up to 50 MB</span>
+      <span class="file-name" id="file-name" aria-live="polite"></span>
+      <input type="file" name="pdf" accept=".pdf,application/pdf" required aria-label="PDF file">
+    </label>
+    <div class="actions"><button type="submit">Make cards &rarr;</button></div>
+  </form>
+
+  <div class="steps">
+    <div class="step"><div class="num">1</div><p><strong>Upload</strong> your unit's PDF.</p></div>
+    <div class="step"><div class="num">2</div><p><strong>Flip</strong> through the cards it finds.</p></div>
+    <div class="step"><div class="num">3</div><p><strong>Quiz</strong> yourself and see what to review.</p></div>
+  </div>
+</div>
+
+<script>
+  // Show the chosen file's name, and highlight the box while a file is dragged over it.
+  const drop = document.getElementById("drop");
+  const input = drop.querySelector("input[type=file]");
+  const nameEl = document.getElementById("file-name");
+  input.addEventListener("change", () => {
+    nameEl.textContent = input.files.length ? input.files[0].name : "";
+  });
+  ["dragenter", "dragover"].forEach(type =>
+    drop.addEventListener(type, () => drop.classList.add("dragging")));
+  ["dragleave", "drop"].forEach(type =>
+    drop.addEventListener(type, () => drop.classList.remove("dragging")));
+</script>
 {% endblock %}

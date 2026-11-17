@@ -20,9 +20,11 @@ NO_TERMS_MESSAGE = (
     '"Term: definition" or "Term - definition".'
 )
 
-# Earliest of: a colon (spaces optional) or a dash (-, en, em) with whitespace on both sides.
-_SEPARATOR = re.compile(r"\s*:\s*|\s+[-–—]\s+")
+# Earliest of: a colon followed by whitespace (so "2:30" is not one), or a dash
+# (-, en, em) with whitespace on both sides.
+_SEPARATOR = re.compile(r"\s*:\s+|\s+[-–—]\s+")
 _BULLET = re.compile(r"^[•◦▪*\-–—]\s+")
+MAX_TERM_WORDS = 4
 
 
 class PdfReadError(Exception):
@@ -48,8 +50,17 @@ def extract_text(source: str | PathLike | BinaryIO) -> str:
         raise PdfReadError(str(exc)) from exc
 
 
+def _is_good_term(term: str) -> bool:
+    """R4: starts with a capital letter, at most 4 words, does not end with a digit."""
+    return (
+        term[0].isupper()
+        and len(term.split()) <= MAX_TERM_WORDS
+        and not term[-1].isdigit()
+    )
+
+
 def parse_line(line: str) -> Card | None:
-    """Return a Card if the line is `Term: definition` or `Term - definition`, else None."""
+    """Return a Card if the line is a card line under R4, else None."""
     line = _BULLET.sub("", line.strip())
     match = _SEPARATOR.search(line)
     if not match:
@@ -58,16 +69,41 @@ def parse_line(line: str) -> Card | None:
     definition = _collapse(line[match.end():])
     if not term or not definition:
         return None
+    if not _is_good_term(term) or definition.endswith("?"):
+        return None
     return Card(term, definition)
 
 
+def _continues_definition(line: str) -> bool:
+    """R7: a following line joins the definition if it starts lowercase and is not
+    blank, a bullet, or a card line of its own."""
+    stripped = line.strip()
+    return (
+        bool(stripped)
+        and stripped[0].islower()
+        and not _BULLET.match(stripped)
+        and parse_line(stripped) is None
+    )
+
+
 def parse_cards(text: str) -> list[Card]:
-    """Return one card per matching line, in order, without exact duplicates."""
+    """Return the cards in order (R4), with wrapped definitions joined (R7) and
+    exact duplicates removed."""
+    lines = text.splitlines()
     cards: list[Card] = []
     seen: set[tuple[str, str]] = set()
-    for line in text.splitlines():
-        card = parse_line(line)
+    i = 0
+    while i < len(lines):
+        card = parse_line(lines[i])
+        i += 1
         if card is None:
+            continue
+        parts = [card.definition]
+        while i < len(lines) and _continues_definition(lines[i]):
+            parts.append(_collapse(lines[i]))
+            i += 1
+        card = Card(card.term, " ".join(parts))
+        if card.definition.endswith("?"):  # R4, checked on the full definition
             continue
         key = (card.term.casefold(), card.definition.casefold())
         if key not in seen:

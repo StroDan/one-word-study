@@ -5,46 +5,156 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>One Word Study</title>
   <style>
-    :root { --bg: #f7f7f5; --fg: #1d1d1b; --muted: #6b6b66; --accent: #2f5fd0; --card: #fff;
-            --good: #1f7a3f; --bad: #b3261e; --line: #deded8; }
-    @media (prefers-color-scheme: dark) {
-      :root { --bg: #181816; --fg: #ececea; --muted: #a3a39d; --accent: #8aa9ff; --card: #23231f;
-              --good: #6fd28f; --bad: #ff8a80; --line: #3a3a35; }
+    /* ---------- Design tokens (light) ---------- */
+    :root {
+      --bg: #f6f7fb;
+      --surface: #ffffff;
+      --surface-2: #f0f2f8;
+      --fg: #161a2b;
+      --muted: #5f667d;
+      --line: #e3e6ef;
+      --accent: #4f46e5;
+      --accent-2: #7c3aed;
+      --accent-soft: #eef0ff;
+      --good: #15803d;
+      --good-soft: #e8f6ee;
+      --bad: #c2410c;
+      --bad-soft: #fdf0e9;
+      --shadow: 0 1px 2px rgba(22, 26, 43, .06), 0 6px 20px rgba(22, 26, 43, .07);
+      --shadow-lg: 0 2px 4px rgba(22, 26, 43, .06), 0 16px 40px rgba(22, 26, 43, .12);
+      --radius: 14px;
     }
+    /* ---------- Dark mode ---------- */
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0f1220;
+        --surface: #181c2e;
+        --surface-2: #20253a;
+        --fg: #e8eaf4;
+        --muted: #9aa1ba;
+        --line: #2b3150;
+        --accent: #8b85ff;
+        --accent-2: #b28bff;
+        --accent-soft: #24264a;
+        --good: #5fd08a;
+        --good-soft: #15291f;
+        --bad: #ff9b6b;
+        --bad-soft: #2e1d15;
+        --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 6px 20px rgba(0, 0, 0, .25);
+        --shadow-lg: 0 2px 4px rgba(0, 0, 0, .3), 0 16px 40px rgba(0, 0, 0, .4);
+      }
+    }
+
     * { box-sizing: border-box; }
-    body { margin: 0; background: var(--bg); color: var(--fg);
-           font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
-    header { border-bottom: 1px solid var(--line); padding: 12px 16px; display: flex; gap: 16px;
-             align-items: baseline; flex-wrap: wrap; }
-    header strong { font-size: 18px; margin-right: auto; }
+    html { -webkit-text-size-adjust: 100%; }
+    body {
+      margin: 0; min-height: 100vh; background: var(--bg); color: var(--fg);
+      font: 16px/1.55 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    }
+    h1 { font-size: clamp(26px, 4vw, 36px); line-height: 1.15; letter-spacing: -.02em; margin: 0 0 8px; }
+    p { margin: 0 0 12px; }
     a { color: var(--accent); }
-    main { max-width: 760px; margin: 0 auto; padding: 24px 16px 48px; }
-    .message { border-left: 4px solid var(--bad); background: var(--card); padding: 12px 16px; }
-    button, input[type=submit] { font: inherit; padding: 8px 16px; border-radius: 6px; cursor: pointer;
-             border: 1px solid var(--accent); background: var(--accent); color: var(--bg); }
-    input[type=text] { font: inherit; padding: 8px; width: 100%; border: 1px solid var(--line);
-             border-radius: 6px; background: var(--card); color: var(--fg); }
+    code { background: var(--surface-2); border-radius: 6px; padding: 1px 6px; font-size: .92em; }
+
+    /* ---------- Header ---------- */
+    .site-header {
+      position: sticky; top: 0; z-index: 10;
+      background: color-mix(in srgb, var(--surface) 85%, transparent);
+      backdrop-filter: saturate(1.4) blur(10px); -webkit-backdrop-filter: saturate(1.4) blur(10px);
+      border-bottom: 1px solid var(--line);
+    }
+    .site-header .inner {
+      max-width: 960px; margin: 0 auto; padding: 12px 16px;
+      display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    }
+    .brand {
+      display: flex; align-items: center; gap: 10px; margin-right: auto;
+      font-weight: 700; font-size: 17px; color: var(--fg); text-decoration: none;
+    }
+    .brand .logo {
+      width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #fff;
+      font-size: 15px; font-weight: 800; box-shadow: var(--shadow);
+    }
+    .nav a {
+      color: var(--muted); text-decoration: none; font-weight: 500; font-size: 15px;
+      padding: 6px 12px; border-radius: 999px;
+    }
+    .nav a:hover { color: var(--fg); background: var(--surface-2); }
+    .nav a.active { color: var(--accent); background: var(--accent-soft); }
+
+    main { max-width: 960px; margin: 0 auto; padding: 40px 16px 64px; }
+    .narrow { max-width: 640px; margin: 0 auto; }
     .muted { color: var(--muted); }
-    .good { color: var(--good); font-weight: 600; }
-    .bad { color: var(--bad); font-weight: 600; }
+    .eyebrow {
+      display: inline-block; font-size: 13px; font-weight: 600; letter-spacing: .04em;
+      text-transform: uppercase; color: var(--accent); margin-bottom: 10px;
+    }
+
+    /* ---------- Buttons & inputs ---------- */
+    .btn, button, input[type=submit] {
+      font: inherit; font-weight: 600; cursor: pointer; border-radius: 10px;
+      padding: 11px 20px; border: 1px solid transparent;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #fff;
+      box-shadow: var(--shadow); transition: transform .12s ease, box-shadow .12s ease;
+      display: inline-flex; align-items: center; gap: 8px; text-decoration: none;
+    }
+    .btn:hover, button:hover { transform: translateY(-1px); box-shadow: var(--shadow-lg); }
+    .btn:active, button:active { transform: translateY(0); }
+    .btn:focus-visible, button:focus-visible, input:focus-visible {
+      outline: 3px solid color-mix(in srgb, var(--accent) 45%, transparent); outline-offset: 2px;
+    }
+    .btn.secondary, button.secondary { background: var(--surface); color: var(--fg); border-color: var(--line); }
+    input[type=text] {
+      font: inherit; font-size: 18px; width: 100%; padding: 12px 14px;
+      border: 1.5px solid var(--line); border-radius: 10px;
+      background: var(--surface); color: var(--fg); transition: border-color .12s;
+    }
+    input[type=text]:focus { border-color: var(--accent); outline: none; }
+
+    /* ---------- Shared pieces ---------- */
+    .panel {
+      background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+      box-shadow: var(--shadow); padding: 24px;
+    }
+    .message {
+      display: flex; gap: 10px; align-items: flex-start;
+      background: var(--bad-soft); color: var(--fg);
+      border: 1px solid color-mix(in srgb, var(--bad) 35%, transparent);
+      border-radius: 12px; padding: 12px 16px; margin: 16px 0;
+    }
+    .message::before {
+      content: "!"; flex: none; width: 22px; height: 22px; border-radius: 50%;
+      display: grid; place-items: center; background: var(--bad); color: #fff; font-weight: 800; font-size: 13px;
+    }
+    .good { color: var(--good); font-weight: 700; }
+    .bad { color: var(--bad); font-weight: 700; }
+    .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+
+    /* ---------- Legacy page styles (each page gets its own design in a later commit) ---------- */
     .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
-    .flash { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px;
-             min-height: 120px; text-align: left; color: var(--fg); font-weight: normal; width: 100%; }
+    .flash { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px;
+             min-height: 120px; text-align: left; color: var(--fg); font-weight: normal; width: 100%; box-shadow: none; }
     .flash .back { display: none; }
     .flash.flipped .front { display: none; }
     .flash.flipped .back { display: block; }
     .flash .front { font-size: 20px; font-weight: 600; }
-    .definition { font-size: 20px; background: var(--card); border: 1px solid var(--line);
+    .definition { font-size: 20px; background: var(--surface); border: 1px solid var(--line);
                   border-radius: 10px; padding: 16px; }
-    form.inline { display: inline; }
+
+    {% block styles %}{% endblock %}
   </style>
 </head>
 <body>
-  <header>
-    <strong>One Word Study</strong>
-    <a href="/">Upload</a>
-    <a href="/cards">Cards</a>
-    <a href="/quiz">Quiz</a>
+  <header class="site-header">
+    <div class="inner">
+      <a class="brand" href="/"><span class="logo" aria-hidden="true">W</span>One Word Study</a>
+      <nav class="nav" aria-label="Main">
+        <a href="/" class="{{ 'active' if request.path in ('/', '/upload') }}">Upload</a>
+        <a href="/cards" class="{{ 'active' if request.path == '/cards' }}">Cards</a>
+        <a href="/quiz" class="{{ 'active' if request.path.startswith('/quiz') }}">Quiz</a>
+      </nav>
+    </div>
   </header>
   <main>{% block content %}{% endblock %}</main>
 </body>

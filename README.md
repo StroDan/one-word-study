@@ -6,8 +6,13 @@ instead of trying to memorize everything.
 ## What it does
 
 1. You upload one PDF of your unit material.
-2. Every line written as `Term: definition` or `Term - definition` becomes a
-   flash card (term on the front, definition on the back; click to flip).
+2. Lines written as `Term: definition` or `Term - definition` become flash
+   cards (term on the front, definition on the back; click to flip). To skip
+   things that only look like terms, the colon needs a space after it (so
+   `2:30` is ignored), the term starts with a capital letter, has at most 4
+   words and doesn't end in a number, and question lines are skipped.
+   A definition that wraps onto following lines starting with a small letter
+   is joined back together.
 3. A quiz shows each definition, one at a time, and you type the term.
    Capitals and extra spaces don't matter. If you're wrong, it shows the
    correct term so you know what to review. You get a score at the end.

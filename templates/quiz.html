@@ -1,29 +1,89 @@
 {% extends "base.html" %}
+{% block styles %}
+    .quiz { max-width: 640px; margin: 0 auto; }
+    .progress-row { display: flex; justify-content: space-between; font-size: 14px; font-weight: 600; margin-bottom: 8px; }
+    .progress { height: 8px; border-radius: 999px; background: var(--surface-2); overflow: hidden; margin-bottom: 24px; }
+    .progress span {
+      display: block; height: 100%; border-radius: inherit;
+      background: linear-gradient(90deg, var(--accent), var(--accent-2)); transition: width .3s;
+    }
+    .prompt { font-size: 13px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+    .definition { font-size: 22px; line-height: 1.45; font-weight: 500; margin: 6px 0 20px; }
+    .answer-row { display: flex; gap: 10px; }
+    .answer-row input { flex: 1; }
+    .feedback { border-radius: 12px; padding: 14px 16px; margin-bottom: 16px; }
+    .feedback p { margin: 0; }
+    .feedback p + p { margin-top: 6px; }
+    .feedback.correct { background: var(--good-soft); border: 1px solid color-mix(in srgb, var(--good) 35%, transparent); }
+    .feedback.wrong { background: var(--bad-soft); border: 1px solid color-mix(in srgb, var(--bad) 35%, transparent); }
+    .feedback .big { font-size: 18px; }
+    .next { display: flex; justify-content: flex-end; }
+
+    .result { text-align: center; }
+    .ring {
+      --pct: 0; width: 160px; height: 160px; margin: 8px auto 20px; border-radius: 50%;
+      display: grid; place-items: center;
+      background: conic-gradient(var(--accent) calc(var(--pct) * 1%), var(--surface-2) 0);
+    }
+    .ring .hole {
+      width: 124px; height: 124px; border-radius: 50%; background: var(--surface);
+      display: grid; place-items: center; font-size: 32px; font-weight: 800; letter-spacing: -.02em;
+    }
+    .result .score { font-size: 20px; font-weight: 700; }
+    .result .actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 16px; }
+    @media (max-width: 480px) { .answer-row { flex-direction: column; } }
+{% endblock %}
 {% block content %}
-<h1>Quiz</h1>
+<div class="quiz">
 {% if done %}
-  <p class="definition">{{ score }} / {{ total }} correct</p>
-  <form action="/quiz/restart" method="post"><button type="submit">Start again</button></form>
+  {% set pct = (100 * score / total)|round|int if total else 0 %}
+  <div class="panel result">
+    <span class="eyebrow">Quiz complete</span>
+    <div class="ring" style="--pct: {{ pct }}"><div class="hole">{{ pct }}%</div></div>
+    <p class="score">{{ score }} / {{ total }} correct</p>
+    <p class="muted">
+      {% if pct == 100 %}Perfect, you know every term.
+      {% elif pct >= 70 %}Nice work. Review the ones you missed and try again.
+      {% else %}Keep going. Flip through the cards, then take the quiz again.{% endif %}
+    </p>
+    <div class="actions">
+      <form action="/quiz/restart" method="post"><button type="submit">Start again</button></form>
+      <a class="btn secondary" href="/cards">Review cards</a>
+    </div>
+  </div>
 {% else %}
-  <p class="muted">Question {{ number }} of {{ total }} &middot; Score {{ score }}</p>
-  <p>Which term matches this definition?</p>
-  <p class="definition">{{ card.definition }}</p>
-  {% if feedback is none %}
-    <form action="/quiz" method="post">
-      <p><input type="text" name="answer" autocomplete="off" autofocus aria-label="Your answer"></p>
-      <p><button type="submit">Check</button></p>
-    </form>
-  {% else %}
-    {% if feedback.correct %}
-      <p class="good">Correct!</p>
+  <div class="progress-row">
+    <span>Question {{ number }} of {{ total }}</span>
+    <span class="muted">Score {{ score }}</span>
+  </div>
+  <div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="{{ total }}"
+       aria-valuenow="{{ number - 1 }}"><span style="width: {{ (100 * (number - 1) / total)|round|int }}%"></span></div>
+
+  <div class="panel">
+    <p class="prompt">Which term matches this definition?</p>
+    <p class="definition">{{ card.definition }}</p>
+    {% if feedback is none %}
+      <form action="/quiz" method="post" class="answer-row">
+        <input type="text" name="answer" autocomplete="off" autofocus aria-label="Your answer" placeholder="Type the term">
+        <button type="submit">Check</button>
+      </form>
     {% else %}
-      <p class="bad">Not quite.</p>
-      <p>You wrote: <em>{{ feedback.answer or "(nothing)" }}</em></p>
-      <p>The correct answer is: <strong>{{ card.term }}</strong></p>
+      {% if feedback.correct %}
+        <div class="feedback correct" role="status">
+          <p class="good big">Correct!</p>
+        </div>
+      {% else %}
+        <div class="feedback wrong" role="status">
+          <p class="bad big">Not quite.</p>
+          <p>You wrote: <em>{{ feedback.answer or "(nothing)" }}</em></p>
+          <p>The correct answer is: <strong>{{ card.term }}</strong></p>
+        </div>
+      {% endif %}
+      <form action="/quiz/next" method="post" class="next">
+        <button type="submit" autofocus>{{ "See score" if number == total else "Next" }} &rarr;</button>
+      </form>
     {% endif %}
-    <form action="/quiz/next" method="post">
-      <button type="submit" autofocus>{{ "See score" if number == total else "Next" }}</button>
-    </form>
-  {% endif %}
+  </div>
 {% endif %}
+</div>
 {% endblock %}

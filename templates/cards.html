@@ -1,14 +1,60 @@
 {% extends "base.html" %}
+{% block styles %}
+    .toolbar { display: flex; gap: 16px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 24px; }
+    .toolbar .titles { margin-right: auto; }
+    .count {
+      display: inline-flex; align-items: center; gap: 6px; font-weight: 600; font-size: 14px;
+      background: var(--accent-soft); color: var(--accent); padding: 4px 12px; border-radius: 999px;
+    }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; }
+
+    /* 3D flip card: both faces sit in the same grid cell, so the card is as tall as its longer side. */
+    .flash {
+      all: unset; display: block; cursor: pointer; perspective: 1000px; border-radius: var(--radius);
+    }
+    .flash:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 45%, transparent); outline-offset: 3px; }
+    .flash .inner {
+      display: grid; min-height: 170px; transition: transform .5s cubic-bezier(.2, .7, .2, 1);
+      transform-style: preserve-3d;
+    }
+    .flash.flipped .inner { transform: rotateY(180deg); }
+    .flash .face {
+      grid-area: 1 / 1; display: flex; flex-direction: column; justify-content: center; gap: 8px;
+      padding: 20px; border-radius: var(--radius); border: 1px solid var(--line);
+      background: var(--surface); box-shadow: var(--shadow);
+      backface-visibility: hidden; -webkit-backface-visibility: hidden;
+    }
+    .flash:hover .face { box-shadow: var(--shadow-lg); }
+    .flash .front { align-items: center; text-align: center; }
+    .flash .front .term { font-size: 21px; font-weight: 700; letter-spacing: -.01em; }
+    .flash .back {
+      transform: rotateY(180deg); background: var(--accent-soft);
+      border-color: color-mix(in srgb, var(--accent) 30%, transparent);
+    }
+    .flash .back .definition-text { font-size: 15px; line-height: 1.5; }
+    .flash .label {
+      font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted);
+    }
+    .hint { font-size: 13px; }
+{% endblock %}
 {% block content %}
-<h1>Flash cards</h1>
-<p class="muted">{{ cards|length }} card{{ "" if cards|length == 1 else "s" }} from {{ filename }}.
-Click a card to flip it.</p>
-<p><a href="/quiz">Start the quiz &rarr;</a></p>
+<div class="toolbar">
+  <div class="titles">
+    <h1>Flash cards</h1>
+    <p class="muted"><span class="count">{{ cards|length }} card{{ "" if cards|length == 1 else "s" }}</span>
+      &nbsp;from {{ filename }} &middot; <span class="hint">click a card to flip it</span></p>
+  </div>
+  <a class="btn" href="/quiz">Start the quiz &rarr;</a>
+</div>
+
 <div class="grid">
   {% for card in cards %}
-  <button type="button" class="flash" onclick="this.classList.toggle('flipped')">
-    <div class="front">{{ card.term }}</div>
-    <div class="back">{{ card.definition }}</div>
+  <button type="button" class="flash" aria-pressed="false"
+          onclick="this.classList.toggle('flipped'); this.setAttribute('aria-pressed', this.classList.contains('flipped'))">
+    <span class="inner">
+      <span class="face front"><span class="label">Term</span><span class="term">{{ card.term }}</span></span>
+      <span class="face back"><span class="label">Definition</span><span class="definition-text">{{ card.definition }}</span></span>
+    </span>
   </button>
   {% endfor %}
 </div>

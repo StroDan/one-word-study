@@ -23,7 +23,13 @@
       padding: 20px; border-radius: var(--radius); border: 1px solid var(--line);
       background: var(--surface); box-shadow: var(--shadow);
       backface-visibility: hidden; -webkit-backface-visibility: hidden;
+      /* Not every renderer honors backface-visibility, so the hidden side is also made
+         transparent; the swap happens halfway through the .5s turn. */
+      transition: opacity 0s .25s;
     }
+    .flash .back { opacity: 0; }
+    .flash.flipped .back { opacity: 1; }
+    .flash.flipped .front { opacity: 0; }
     .flash:hover .face { box-shadow: var(--shadow-lg); }
     .flash .front { align-items: center; text-align: center; }
     .flash .front .term { font-size: 21px; font-weight: 700; letter-spacing: -.01em; }

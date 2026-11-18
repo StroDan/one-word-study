@@ -1,14 +1,19 @@
-"""Flash card logic: PDF text extraction, card parsing, quiz building, answer checking.
+"""Flash card logic: PDF text extraction, card parsing, quiz building, answer checking,
+and saving cards to a JSON file.
 
 No Flask imports here, so everything can be tested without a browser.
 See spec.md for the exact rules.
 """
 from __future__ import annotations
 
+import json
+import os
 import random
 import re
+import tempfile
 from dataclasses import dataclass
 from os import PathLike
+from pathlib import Path
 from typing import BinaryIO
 
 from pypdf import PdfReader
@@ -25,6 +30,7 @@ NO_TERMS_MESSAGE = (
 _SEPARATOR = re.compile(r"\s*:\s+|\s+[-–—]\s+")
 _BULLET = re.compile(r"^[•◦▪*\-–—]\s+")
 MAX_TERM_WORDS = 4
+QUIZ_LENGTHS = (10, 20)  # R9: the number choices; "all" is always offered too
 
 
 class PdfReadError(Exception):
@@ -123,11 +129,19 @@ def cards_from_pdf(source: str | PathLike | BinaryIO) -> tuple[list[Card], str |
     return cards, None
 
 
-def build_quiz(cards: list[Card], rng: random.Random | None = None) -> list[Card]:
-    """Return a shuffled copy of the cards: one question per card."""
-    quiz = list(cards)
-    (rng or random).shuffle(quiz)
-    return quiz
+def build_quiz(
+    cards: list[Card], count: int | None = None, rng: random.Random | None = None
+) -> list[Card]:
+    """Return `count` cards picked at random with no repeats (R9), in random order.
+    count None, or bigger than the number of cards, means every card once (R3)."""
+    size = len(cards) if count is None else min(count, len(cards))
+    return (rng or random).sample(cards, size)
+
+
+def quiz_length_choices(card_count: int) -> list[int]:
+    """R9: the number choices to offer: only those smaller than the card count
+    (a choice equal to or above it would just be "all")."""
+    return [n for n in QUIZ_LENGTHS if n < card_count]
 
 
 def normalize(text: str) -> str:
@@ -138,3 +152,38 @@ def check_answer(answer: str, term: str) -> bool:
     """True when the answer matches the term, ignoring capitals and extra spaces."""
     given = normalize(answer)
     return bool(given) and given == normalize(term)
+
+
+def save_cards(path: str | PathLike, filename: str, cards: list[Card]) -> None:
+    """R10: save the cards and the PDF's filename as JSON. Written to a temp file in the
+    same folder and then renamed, so a crash never leaves a half-written file."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    data = {
+        "filename": filename,
+        "cards": [{"term": c.term, "definition": c.definition} for c in cards],
+    }
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=".cards-", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            json.dump(data, fh, ensure_ascii=False, indent=2)
+        os.replace(tmp, path)
+    except BaseException:
+        Path(tmp).unlink(missing_ok=True)
+        raise
+
+
+def load_cards(path: str | PathLike) -> tuple[str, list[Card]] | None:
+    """R10: return (filename, cards) from a save file, or None if there is no usable
+    file (missing, not JSON, wrong shape, or no cards)."""
+    try:
+        data = json.loads(Path(path).read_text(encoding="utf-8"))
+        filename = data["filename"]
+        cards = [Card(c["term"], c["definition"]) for c in data["cards"]]
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+    if not isinstance(filename, str) or not cards:
+        return None
+    if not all(isinstance(c.term, str) and isinstance(c.definition, str) for c in cards):
+        return None
+    return filename, cards

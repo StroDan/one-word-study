@@ -1,6 +1,6 @@
 # One Word Study — Specification
 
-Source of truth: `problem.md`. This file turns requirements R1–R7 into
+Source of truth: `problem.md`. This file turns requirements R1–R10 into
 precise, testable behavior. Decisions marked *(clarified)* were confirmed
 with the project owner before coding.
 
@@ -24,7 +24,9 @@ is a thin web layer over it.
   `Could not read this file as a PDF.`
 - Uploads up to 50 MB are accepted. Bigger files get the response:
   `This PDF is too large (limit is 50 MB).`
-- A new upload replaces the student's previous cards and quiz.
+- *(changed with R10)* A new upload does not clear the current cards by
+  itself. A failed upload keeps them, and a good one replaces them only
+  after the student confirms (see R10).
 
 ## R2 — Flash cards
 
@@ -36,12 +38,16 @@ is a thin web layer over it.
 
 ## R3 — Quiz from the cards
 
-- The quiz has exactly one question per card; every card appears once.
+- *(changed with R9)* The quiz asks the number of questions the student
+  chose (R9). No card is asked twice in the same quiz. Choosing "all"
+  asks every card exactly once.
 - Question order is shuffled for each new quiz.
 - *(clarified)* One question at a time: `/quiz` shows the current
   question; after the student answers, it shows feedback and a "Next"
   button. After the last question it shows the score (`X / N correct`)
-  and a link to start again.
+  and a "New quiz" button, which goes back to the length choice (R9).
+- If there is no quiz in progress, `/quiz` shows the length choice (R9).
+  If there are no cards, it redirects to `/`.
 
 ## R4 — Which lines become cards
 
@@ -78,13 +84,16 @@ After a card line, each following line is added to the definition
 (separated by one space, with its inner whitespace collapsed) while the
 line:
 
-- starts with a lowercase letter (after leading whitespace), and
+- *(changed with R7)* starts with a lowercase letter or an opening
+  parenthesis `(` (after leading whitespace), and
 - is not empty or whitespace only, does not start with a bullet marker
   from R4 step 1, and is not itself a card line under R4.
 
 The first line that fails any of these ends the definition. So a
 capitalized line (often the next slide's title, or a new sentence in a
-glossary) ends it.
+glossary) ends it. A line like `(see also: Diffusion)` continues the
+definition; it is never a card line itself, because its "term" does not
+start with a capital letter.
 
 Known limit: a lowercase line that is not part of the definition (for
 example a sentence that happens to start lowercase) is still added.
@@ -111,10 +120,72 @@ project does not use.
 - In both cases the student stays on the upload page and can try another
   file.
 
+## R8 — Practice missed cards
+
+- During a round the app remembers every card answered wrong (including
+  empty answers).
+- On the score page, if at least one answer was wrong, there is a button
+  `Practice the N missed cards` (`Practice the 1 missed card` when N is 1).
+- A practice round asks only those cards, each once, in a new random
+  order. It works like a normal quiz (R5 checking, feedback, Next) and its
+  page is labelled `Practice round`.
+- At the end of a practice round the score page shows `X / N correct` for
+  that round. If some are still wrong, it offers `Practice the K missed
+  cards` again (only the cards missed in *this* round) and a
+  `Stop practicing` button, which ends the round and goes to `/cards`.
+  If all are right, it says so and offers "New quiz" and "Review cards".
+- The score page of a normal quiz keeps its "New quiz" and "Review cards"
+  buttons next to the practice button.
+
+## R9 — Choose quiz length
+
+- Before a quiz starts, `/quiz` shows `How many questions?` with one
+  button per choice; each posts `length` (`10`, `20` or `all`) to
+  `/quiz/start`.
+- A number choice is shown only when it is **smaller** than the number of
+  cards; `All N cards` is always shown. So with 25 cards the choices are
+  `10 questions`, `20 questions`, `All 25 cards`; with 15 cards
+  `10 questions`, `All 15 cards`; with 10 or fewer only `All N cards`,
+  plus the note `This set has N cards, so the quiz asks all of them.`
+- Questions are picked at random from the cards with no repeats
+  (`random.sample`). `build_quiz` takes an optional random generator so
+  tests can fix the seed.
+- An unknown `length` value shows the choice page again. A number bigger
+  than the card count asks all cards.
+
+## R10 — Save cards between visits
+
+- The current cards and the PDF's filename are saved as JSON at
+  `~/.one-word-study/cards.json` (outside the repository).
+  `create_app(save_path=...)` can point it elsewhere; tests always use a
+  temporary path.
+- File format: `{"filename": "<name>.pdf", "cards": [{"term": "...",
+  "definition": "..."}, ...]}`. It is written to a temporary file in the
+  same folder and then renamed, so a crash never leaves half a file.
+- When the app starts, it loads that file. If the file is missing, is not
+  valid JSON, or has the wrong shape, the app starts with no cards.
+- When saved cards exist, the home page shows `You have N saved cards
+  from A.` with links to the cards and the quiz.
+- Upload flow:
+  1. The new PDF is read first. The current cards are not touched yet.
+  2. If it can't be used (no file, not a PDF, too large, no text, no
+     terms), the page shows why (R1/R6 messages) and the current cards
+     stay.
+  3. If it has cards and there are no saved cards, they are saved and the
+     student goes to `/cards`.
+  4. If it has cards and saved cards exist, the page asks
+     `Replace N cards from A with M cards from B?` with `Replace` and
+     `Cancel` buttons. The new cards wait in server memory for that
+     browser. `Replace` saves them, ends any quiz in progress and goes to
+     `/cards`. `Cancel` drops them and goes to `/cards` with the old cards.
+- Quiz progress is not saved to disk; only the cards are.
+
 ## Non-functional
 
 - Python 3.12, Flask, pypdf, pytest. No API keys, logins, or paid
   services.
 - Runs locally with one command (`./run.sh`) on `http://127.0.0.1:5050`.
-- Cards and quiz state are kept in server memory per browser session.
-  Nothing is written to disk, and state is lost when the server stops.
+- *(changed with R10)* The cards are saved to one JSON file on this
+  computer (R10), shared by every browser tab. Quiz progress and a
+  pending upload are kept in server memory per browser session and are
+  lost when the server stops.

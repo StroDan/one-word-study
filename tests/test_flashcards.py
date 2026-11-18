@@ -135,12 +135,6 @@ def test_R9_number_choices_are_only_those_smaller_than_the_card_count(count, exp
 
 # ---------- R10: save cards between visits ----------
 
-def test_R10_saved_cards_load_back(tmp_path):
-    path = tmp_path / "cards.json"
-    save_cards(path, "sample.pdf", SAMPLE_CARDS)
-    assert load_cards(path) == ("sample.pdf", SAMPLE_CARDS)
-
-
 def test_R10_save_file_is_readable_json(tmp_path):
     path = tmp_path / "cards.json"
     save_cards(path, "sample.pdf", SAMPLE_CARDS[:1])

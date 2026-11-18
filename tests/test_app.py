@@ -76,12 +76,11 @@ def test_R1_successful_upload_redirects_to_cards(client):
     assert response.headers["Location"].endswith("/cards")
 
 
-def test_R1_new_upload_replaces_old_cards(client):
-    # Changed with R10: a failed upload (like no_terms.pdf) now keeps the old cards,
-    # and a good one replaces them only after the student confirms.
+def test_R1_new_upload_becomes_the_current_cards(client):
+    # Changed with R10: a good upload is added as a new set without asking and becomes
+    # the current one; the old set stays in the history (R11).
     upload(client, "sample.pdf")
     upload(client, "glossary.pdf")
-    client.post("/upload/replace")
     assert "Osmosis" not in page(client.get("/cards"))
 
 

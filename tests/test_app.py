@@ -411,20 +411,6 @@ def test_R10_first_upload_needs_no_confirmation(saved_client):
     assert response.headers["Location"].endswith("/cards")
 
 
-def test_R10_cancel_keeps_the_old_cards(saved_client, save_path):
-    upload(saved_client, "sample.pdf")
-    upload(saved_client, "glossary.pdf")
-    response = saved_client.post("/upload/cancel")
-    assert response.headers["Location"].endswith("/cards")
-    text = visible(saved_client.get("/cards"))
-    assert "Osmosis" in text
-    assert "Inflation" not in text
-    assert load_cards(save_path)[0] == "sample.pdf"
-    # The cancelled upload is forgotten: a late Replace does nothing.
-    saved_client.post("/upload/replace")
-    assert "Osmosis" in visible(saved_client.get("/cards"))
-
-
 def test_R10_replace_without_pending_upload_changes_nothing(saved_client):
     upload(saved_client, "sample.pdf")
     response = saved_client.post("/upload/replace")

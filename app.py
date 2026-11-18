@@ -8,11 +8,13 @@ from pathlib import Path
 from flask import Flask, redirect, render_template, request, session, url_for
 
 from flashcards import (
+    QUIZ_LENGTHS,
     PdfReadError,
     build_quiz,
     cards_from_pdf,
     check_answer,
     load_cards,
+    quiz_length_choices,
     save_cards,
 )
 
@@ -49,16 +51,14 @@ def create_app(save_path: str | os.PathLike | None = None) -> Flask:
         return data
 
     def state() -> dict | None:
-        """This browser's quiz state, or None when there are no cards yet."""
+        """This browser's quiz state, or None when there are no cards yet.
+        Its "quiz" is None until the student picks a length (R9)."""
         if not deck["cards"]:
             return None
-        data = session_state()
-        if data["quiz"] is None:
-            new_quiz(data)
-        return data
+        return session_state()
 
-    def new_quiz(data: dict) -> None:
-        data.update(quiz=build_quiz(deck["cards"]), index=0, score=0, feedback=None)
+    def new_quiz(data: dict, count: int | None) -> None:
+        data.update(quiz=build_quiz(deck["cards"], count), index=0, score=0, feedback=None)
 
     def upload_page(message: str):
         return render_template("index.html", message=message, deck=deck)
@@ -118,13 +118,31 @@ def create_app(save_path: str | os.PathLike | None = None) -> Flask:
         data = state()
         if data is None:
             return redirect(url_for("index"))
+        if data["quiz"] is None:
+            return render_template("choose.html", total=len(deck["cards"]),
+                                   choices=quiz_length_choices(len(deck["cards"])))
         return render_quiz(data)
+
+    @app.post("/quiz/start")
+    def start():
+        data = state()
+        if data is None:
+            return redirect(url_for("index"))
+        length = request.form.get("length", "")
+        if length == "all":
+            new_quiz(data, None)
+        elif length in {str(n) for n in QUIZ_LENGTHS}:
+            new_quiz(data, int(length))  # build_quiz asks all cards if there are fewer
+        # Any other value: the choice page is shown again.
+        return redirect(url_for("quiz"))
 
     @app.post("/quiz")
     def answer():
         data = state()
         if data is None:
             return redirect(url_for("index"))
+        if data["quiz"] is None:
+            return redirect(url_for("quiz"))
         if data["feedback"] is None and data["index"] < len(data["quiz"]):
             card = data["quiz"][data["index"]]
             correct = check_answer(request.form.get("answer", ""), card.term)
@@ -137,7 +155,7 @@ def create_app(save_path: str | os.PathLike | None = None) -> Flask:
         data = state()
         if data is None:
             return redirect(url_for("index"))
-        if data["feedback"] is not None:
+        if data["quiz"] is not None and data["feedback"] is not None:
             data["index"] += 1
             data["feedback"] = None
         return redirect(url_for("quiz"))
@@ -147,7 +165,7 @@ def create_app(save_path: str | os.PathLike | None = None) -> Flask:
         data = state()
         if data is None:
             return redirect(url_for("index"))
-        new_quiz(data)
+        data["quiz"] = None  # R9: a new quiz starts with the length choice
         return redirect(url_for("quiz"))
 
     def render_quiz(data: dict):

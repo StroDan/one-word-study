@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block styles %}
+    .choose { max-width: 640px; margin: 0 auto; text-align: center; }
+    .choose h1 { margin-bottom: 4px; }
+    .options {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px;
+      margin: 24px 0 8px;
+    }
+    .options button {
+      flex-direction: column; justify-content: center; gap: 2px; width: 100%; padding: 22px 16px;
+      background: var(--surface); color: var(--fg); border: 1.5px solid var(--line);
+    }
+    .options button:hover { border-color: var(--accent); background: var(--accent-soft); }
+    .options .num { font-size: 30px; font-weight: 800; letter-spacing: -.02em; line-height: 1.1; }
+    .options .all .num {
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+    }
+    .options .what { font-size: 14px; font-weight: 600; color: var(--muted); }
+    .note { font-size: 14px; margin-top: 12px; }
+{% endblock %}
+{% block content %}
+<div class="choose">
+  <div class="panel">
+    <span class="eyebrow">New quiz</span>
+    <h1>How many questions?</h1>
+    <p class="muted">Questions are picked at random from your cards, with no card asked twice.</p>
+    <form action="/quiz/start" method="post" class="options">
+      {% for n in choices %}
+      <button type="submit" name="length" value="{{ n }}">
+        <span class="num">{{ n }}</span> <span class="what">questions</span>
+      </button>
+      {% endfor %}
+      <button type="submit" name="length" value="all" class="all" {% if not choices %}autofocus{% endif %}>
+        <span class="num">All</span> <span class="what">{{ total }} card{{ "" if total == 1 else "s" }}</span>
+      </button>
+    </form>
+    {% if not choices %}
+    <p class="muted note">This set has {{ total }} card{{ "" if total == 1 else "s" }}, so the quiz asks all of them.</p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

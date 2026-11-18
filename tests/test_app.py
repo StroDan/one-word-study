@@ -23,8 +23,8 @@ DEFINITION_TO_TERM = {d: t for t, d in SAMPLE_TERMS.items()}
 
 
 @pytest.fixture
-def client():
-    app = create_app()
+def client(tmp_path):
+    app = create_app(save_path=tmp_path / "cards.json")  # R10: never touch the real save file
     app.config["TESTING"] = True
     return app.test_client()
 

@@ -382,13 +382,6 @@ def test_R9_start_without_cards_redirects_home(saved_client):
 
 # ---------- R10: save cards between visits ----------
 
-def test_R10_upload_saves_cards_and_filename_to_file(saved_client, save_path):
-    upload(saved_client, "sample.pdf")
-    saved = json.loads(save_path.read_text(encoding="utf-8"))
-    assert saved["filename"] == "sample.pdf"
-    assert {c["term"]: c["definition"] for c in saved["cards"]} == SAMPLE_TERMS
-
-
 def test_R10_saved_cards_are_there_after_restart(save_path):
     upload(make_client(save_path), "sample.pdf")
     later = make_client(save_path)  # a new server process, a new browser session

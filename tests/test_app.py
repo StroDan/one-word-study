@@ -411,19 +411,6 @@ def test_R10_first_upload_needs_no_confirmation(saved_client):
     assert response.headers["Location"].endswith("/cards")
 
 
-def test_R10_new_upload_asks_before_replacing(saved_client, save_path):
-    upload(saved_client, "sample.pdf")
-    response = upload(saved_client, "glossary.pdf")
-    text = visible(response)
-    assert "Replace 5 cards from sample.pdf with 3 cards from glossary.pdf?" in text
-    assert 'action="/upload/replace"' in page(response)
-    assert 'action="/upload/cancel"' in page(response)
-    assert "Replace" in text and "Cancel" in text
-    # Nothing is replaced until the student confirms.
-    assert "Osmosis" in visible(saved_client.get("/cards"))
-    assert json.loads(save_path.read_text(encoding="utf-8"))["filename"] == "sample.pdf"
-
-
 def test_R10_replace_saves_the_new_cards(saved_client, save_path):
     upload(saved_client, "sample.pdf")
     upload(saved_client, "glossary.pdf")

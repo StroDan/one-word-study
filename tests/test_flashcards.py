@@ -1,5 +1,6 @@
 """Tests for the logic module (no Flask). Each test name starts with its requirement ID."""
 import io
+import json
 import random
 from pathlib import Path
 
@@ -14,8 +15,11 @@ from flashcards import (
     cards_from_pdf,
     check_answer,
     extract_text,
+    load_cards,
     parse_cards,
     parse_line,
+    quiz_length_choices,
+    save_cards,
 )
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -80,6 +84,109 @@ def test_R3_quiz_is_shuffled_and_does_not_change_input():
 
 def test_R3_quiz_of_no_cards_is_empty():
     assert build_quiz([]) == []
+
+
+# ---------- R9: choose quiz length ----------
+
+MANY_CARDS = [Card(f"Term {chr(65 + i)}", f"Meaning {i}") for i in range(25)]
+
+
+def test_R9_quiz_of_ten_picks_ten_different_cards():
+    quiz = build_quiz(MANY_CARDS, count=10, rng=random.Random(7))
+    assert len(quiz) == 10
+    assert len(set(quiz)) == 10
+    assert set(quiz) <= set(MANY_CARDS)
+
+
+def test_R9_same_seed_gives_same_quiz():
+    first = build_quiz(MANY_CARDS, count=20, rng=random.Random(42))
+    second = build_quiz(MANY_CARDS, count=20, rng=random.Random(42))
+    assert first == second
+    assert len(set(first)) == 20
+
+
+def test_R9_quiz_cards_are_picked_at_random():
+    picks = {frozenset(build_quiz(MANY_CARDS, count=10, rng=random.Random(s))) for s in range(10)}
+    assert len(picks) > 1
+
+
+def test_R9_count_none_asks_every_card_once():
+    quiz = build_quiz(MANY_CARDS, count=None, rng=random.Random(3))
+    assert sorted(quiz, key=lambda c: c.term) == sorted(MANY_CARDS, key=lambda c: c.term)
+
+
+def test_R9_count_bigger_than_cards_asks_every_card_once():
+    quiz = build_quiz(SAMPLE_CARDS, count=10, rng=random.Random(3))
+    assert sorted(quiz, key=lambda c: c.term) == sorted(SAMPLE_CARDS, key=lambda c: c.term)
+
+
+def test_R9_build_quiz_does_not_change_input():
+    original = list(MANY_CARDS)
+    build_quiz(MANY_CARDS, count=10, rng=random.Random(1))
+    assert MANY_CARDS == original
+
+
+@pytest.mark.parametrize("count, expected", [
+    (25, [10, 20]), (21, [10, 20]), (20, [10]), (15, [10]), (11, [10]), (10, []), (5, []), (1, []),
+])
+def test_R9_number_choices_are_only_those_smaller_than_the_card_count(count, expected):
+    assert quiz_length_choices(count) == expected
+
+
+# ---------- R10: save cards between visits ----------
+
+def test_R10_saved_cards_load_back(tmp_path):
+    path = tmp_path / "cards.json"
+    save_cards(path, "sample.pdf", SAMPLE_CARDS)
+    assert load_cards(path) == ("sample.pdf", SAMPLE_CARDS)
+
+
+def test_R10_save_file_is_readable_json(tmp_path):
+    path = tmp_path / "cards.json"
+    save_cards(path, "sample.pdf", SAMPLE_CARDS[:1])
+    assert json.loads(path.read_text(encoding="utf-8")) == {
+        "filename": "sample.pdf",
+        "cards": [{"term": "Cell", "definition": "The basic unit of life."}],
+    }
+
+
+def test_R10_save_creates_missing_folder_and_leaves_no_temp_files(tmp_path):
+    path = tmp_path / "new folder" / "cards.json"
+    save_cards(path, "a.pdf", SAMPLE_CARDS)
+    assert [f.name for f in path.parent.iterdir()] == ["cards.json"]
+
+
+def test_R10_saving_again_replaces_the_old_cards(tmp_path):
+    path = tmp_path / "cards.json"
+    save_cards(path, "a.pdf", SAMPLE_CARDS)
+    save_cards(path, "b.pdf", SAMPLE_CARDS[:2])
+    assert load_cards(path) == ("b.pdf", SAMPLE_CARDS[:2])
+
+
+def test_R10_non_ascii_text_survives_saving(tmp_path):
+    path = tmp_path / "cards.json"
+    cards = [Card("Ölçü", "Größe – “quoted” • bullet")]
+    save_cards(path, "été.pdf", cards)
+    assert load_cards(path) == ("été.pdf", cards)
+
+
+def test_R10_missing_file_loads_nothing(tmp_path):
+    assert load_cards(tmp_path / "nothing.json") is None
+
+
+@pytest.mark.parametrize("content", [
+    "not json",
+    "",
+    "[]",
+    '{"filename": "a.pdf"}',
+    '{"filename": "a.pdf", "cards": [{"term": "Cell"}]}',
+    '{"filename": 3, "cards": []}',
+    '{"filename": "a.pdf", "cards": []}',
+])
+def test_R10_broken_or_empty_file_loads_nothing(tmp_path, content):
+    path = tmp_path / "cards.json"
+    path.write_text(content, encoding="utf-8")
+    assert load_cards(path) is None
 
 
 # ---------- R4: only "Term: definition" / "Term - definition" lines ----------
@@ -212,6 +319,34 @@ def test_R7_new_card_line_starts_a_new_card():
 def test_R7_continuation_whitespace_is_collapsed():
     text = "Cell: the   unit\n   of    life"
     assert parse_cards(text) == [Card("Cell", "the unit of life")]
+
+
+def test_R7_line_starting_with_parenthesis_continues_the_definition():
+    text = "Osmosis: movement of water across a membrane\n(from low to high concentration)"
+    assert parse_cards(text) == [
+        Card("Osmosis", "movement of water across a membrane (from low to high concentration)")
+    ]
+
+
+def test_R7_parenthesis_line_with_leading_spaces_and_more_lines_after_it():
+    text = "Enzyme: A protein\n   (a catalyst)\nthat speeds up reactions\nAtom: Unit of matter"
+    assert parse_cards(text) == [
+        Card("Enzyme", "A protein (a catalyst) that speeds up reactions"),
+        Card("Atom", "Unit of matter"),
+    ]
+
+
+def test_R7_parenthesis_line_with_colon_is_still_a_continuation():
+    # "(see also" does not start with a capital letter, so the line is never a card of its own.
+    assert parse_cards("Osmosis: movement of water\n(see also: Diffusion)") == [
+        Card("Osmosis", "movement of water (see also: Diffusion)")
+    ]
+
+
+def test_R7_blank_line_still_ends_before_a_parenthesis_line():
+    assert parse_cards("Osmosis: movement of water\n\n(not part of it)") == [
+        Card("Osmosis", "movement of water")
+    ]
 
 
 def test_R4_R7_slides_style_pdf():

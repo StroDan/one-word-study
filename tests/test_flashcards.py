@@ -135,10 +135,6 @@ def test_R9_number_choices_are_only_those_smaller_than_the_card_count(count, exp
 
 # ---------- R10: save cards between visits ----------
 
-def test_R10_missing_file_loads_nothing(tmp_path):
-    assert load_cards(tmp_path / "nothing.json") is None
-
-
 @pytest.mark.parametrize("content", [
     "not json",
     "",

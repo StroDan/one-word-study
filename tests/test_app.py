@@ -3,6 +3,7 @@ import html
 import io
 import json
 import re
+from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -517,3 +518,277 @@ def test_R10_failed_upload_keeps_the_quiz_in_progress(saved_client):
 def test_R10_default_save_file_is_outside_the_repo():
     repo = Path(__file__).resolve().parent.parent
     assert repo not in DEFAULT_SAVE_PATH.resolve().parents
+
+
+# ---------- R10 (changed) and R11: every upload is a saved set; card history ----------
+
+class FakeClock:
+    """Returns Nov 1 2026 09:00 on the first call, then one day later on each call."""
+
+    def __init__(self):
+        self.calls = 0
+
+    def __call__(self):
+        self.calls += 1
+        return datetime(2026, 11, self.calls, 9, 0, 0)
+
+
+@pytest.fixture
+def clock():
+    return FakeClock()
+
+
+@pytest.fixture
+def history_app(save_path, clock):
+    app = create_app(save_path=save_path, clock=clock)
+    app.config["TESTING"] = True
+    return app
+
+
+@pytest.fixture
+def hc(history_app):
+    """A browser on the history app."""
+    return history_app.test_client()
+
+
+def upload_as(client, fixture, name, follow=True):
+    data = {"pdf": (io.BytesIO((FIXTURES / fixture).read_bytes()), name)}
+    return client.post("/upload", data=data, content_type="multipart/form-data",
+                       follow_redirects=follow)
+
+
+def saved_sets(save_path):
+    return json.loads(save_path.read_text(encoding="utf-8"))["sets"]
+
+
+def set_id(save_path, filename):
+    [found] = [s["id"] for s in saved_sets(save_path) if s["filename"] == filename]
+    return found
+
+
+def history_rows(client):
+    """The history list on the home page, as visible text per row."""
+    text = page(client.get("/"))
+    rows = re.findall(r'<li class="set[^"]*">(.*?)</li>', text, re.S)
+    return [re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", row)).strip() for row in rows]
+
+
+def test_R10_upload_saves_the_set_with_its_date(hc, save_path):
+    upload(hc, "sample.pdf")
+    [saved] = saved_sets(save_path)
+    assert saved["filename"] == "sample.pdf"
+    assert saved["uploaded"] == "2026-11-01T09:00:00"
+    assert {c["term"]: c["definition"] for c in saved["cards"]} == SAMPLE_TERMS
+    assert re.fullmatch(r"[0-9a-f]{32}", saved["id"])
+
+
+def test_R10_new_upload_is_added_without_asking(hc, save_path):
+    upload(hc, "sample.pdf")
+    response = upload(hc, "glossary.pdf", follow=False)
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/cards")
+    text = visible(hc.get("/cards"))
+    for term in GLOSSARY_TERMS:
+        assert term in text
+    assert "Osmosis" not in text
+    assert [s["filename"] for s in saved_sets(save_path)] == ["glossary.pdf", "sample.pdf"]
+
+
+def test_R10_replace_warning_and_its_routes_are_gone(hc):
+    upload(hc, "sample.pdf")
+    text = visible(upload(hc, "glossary.pdf"))
+    assert "Replace" not in text
+    assert hc.post("/upload/replace").status_code == 404
+    assert hc.post("/upload/cancel").status_code == 404
+
+
+def test_R10_failed_upload_keeps_every_set_and_the_current_one(hc, save_path):
+    upload_as(hc, "sample.pdf", "a.pdf")
+    upload_as(hc, "glossary.pdf", "b.pdf")
+    hc.post(f"/sets/{set_id(save_path, 'a.pdf')}/study")
+    before = save_path.read_bytes()
+    response = upload(hc, "no_terms.pdf")
+    assert NO_TERMS_MESSAGE in page(response)
+    assert save_path.read_bytes() == before
+    assert "Osmosis" in visible(hc.get("/cards"))
+
+
+def test_R10_old_one_set_save_file_is_loaded_as_a_set(save_path):
+    save_path.parent.mkdir(parents=True)
+    old = {"filename": "unit.pdf",
+           "cards": [{"term": t, "definition": d} for t, d in SAMPLE_TERMS.items()]}
+    save_path.write_text(json.dumps(old), encoding="utf-8")
+    client = make_client(save_path)
+    assert "Osmosis" in visible(client.get("/cards"))
+    assert "You're studying 5 cards from unit.pdf." in visible(client.get("/"))
+    [row] = history_rows(client)
+    assert "unit.pdf" in row and "5 cards" in row
+    # Kept, not lost, when the next PDF is added.
+    upload(client, "glossary.pdf")
+    assert [s["filename"] for s in saved_sets(save_path)] == ["glossary.pdf", "unit.pdf"]
+
+
+def test_R11_home_page_lists_sets_newest_first_with_name_date_and_count(hc):
+    assert "Your card sets" not in visible(hc.get("/"))
+    upload(hc, "sample.pdf")
+    upload(hc, "glossary.pdf")
+    assert "Your card sets" in visible(hc.get("/"))
+    rows = history_rows(hc)
+    assert len(rows) == 2
+    assert "glossary.pdf" in rows[0] and "Nov 2, 2026" in rows[0] and "3 cards" in rows[0]
+    assert "sample.pdf" in rows[1] and "Nov 1, 2026" in rows[1] and "5 cards" in rows[1]
+
+
+def test_R11_one_card_uses_singular(save_path):
+    save_path.parent.mkdir(parents=True)
+    save_path.write_text(json.dumps({"sets": [{
+        "id": "a" * 32, "filename": "one.pdf", "uploaded": "2026-11-01T09:00:00",
+        "cards": [{"term": "Cell", "definition": "The basic unit of life."}]}]}), encoding="utf-8")
+    [row] = history_rows(make_client(save_path))
+    assert "1 card" in row and "1 cards" not in row
+
+
+def test_R11_current_set_is_marked_in_the_list(hc, save_path):
+    upload(hc, "sample.pdf")
+    upload(hc, "glossary.pdf")
+    rows = history_rows(hc)
+    assert "Studying now" in rows[0] and "Studying now" not in rows[1]
+    assert "You're studying 3 cards from glossary.pdf." in visible(hc.get("/"))
+
+
+def test_R11_picking_a_set_makes_it_current(hc, save_path):
+    upload(hc, "sample.pdf")
+    upload(hc, "glossary.pdf")
+    response = hc.post(f"/sets/{set_id(save_path, 'sample.pdf')}/study")
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/cards")
+    assert "Osmosis" in visible(hc.get("/cards"))
+    assert "Question 1 of 5" in visible(start_quiz(hc))
+    # Picking does not change the order of the list.
+    rows = history_rows(hc)
+    assert "glossary.pdf" in rows[0] and "Studying now" in rows[1]
+
+
+def test_R11_each_row_has_study_and_delete(hc, save_path):
+    upload(hc, "sample.pdf")
+    text = page(hc.get("/"))
+    sid = set_id(save_path, "sample.pdf")
+    assert f'action="/sets/{sid}/study"' in text
+    assert f'href="/sets/{sid}/delete"' in text
+
+
+def test_R11_picking_another_set_ends_the_quiz_but_picking_the_same_keeps_it(hc, save_path):
+    upload(hc, "sample.pdf")
+    upload(hc, "glossary.pdf")
+    start_quiz(hc)
+    hc.post(f"/sets/{set_id(save_path, 'glossary.pdf')}/study")
+    assert "Question 1 of 3" in visible(hc.get("/quiz"))
+    hc.post(f"/sets/{set_id(save_path, 'sample.pdf')}/study")
+    assert "How many questions?" in visible(hc.get("/quiz"))
+
+
+def test_R11_picking_an_unknown_set_changes_nothing(hc):
+    upload(hc, "sample.pdf")
+    response = hc.post("/sets/nope/study")
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/")
+    assert "Osmosis" in visible(hc.get("/cards"))
+
+
+def test_R11_current_set_is_per_browser(history_app, save_path):
+    first, second = history_app.test_client(), history_app.test_client()
+    upload(first, "sample.pdf")
+    upload(second, "glossary.pdf")
+    assert "Osmosis" in visible(first.get("/cards"))
+    assert "Inflation" in visible(second.get("/cards"))
+
+
+def test_R11_after_restart_the_newest_set_is_current(hc, save_path):
+    upload(hc, "sample.pdf")
+    upload(hc, "glossary.pdf")
+    hc.post(f"/sets/{set_id(save_path, 'sample.pdf')}/study")
+    later = make_client(save_path)
+    assert "Inflation" in visible(later.get("/cards"))
+
+
+def test_R11_delete_asks_first_and_deletes_nothing_yet(hc, save_path):
+    upload(hc, "sample.pdf")
+    sid = set_id(save_path, "sample.pdf")
+    response = hc.get(f"/sets/{sid}/delete")
+    assert response.status_code == 200
+    text = visible(response)
+    assert "Delete sample.pdf (5 cards)?" in text
+    assert f'action="/sets/{sid}/delete"' in page(response)
+    assert "Delete" in text and "Cancel" in text
+    assert re.search(r'<a [^>]*href="/"[^>]*>\s*Cancel', page(response))
+    assert len(saved_sets(save_path)) == 1
+
+
+def test_R11_confirmed_delete_removes_the_set(hc, save_path):
+    upload(hc, "sample.pdf")
+    upload(hc, "glossary.pdf")
+    response = hc.post(f"/sets/{set_id(save_path, 'sample.pdf')}/delete")
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/")
+    assert [s["filename"] for s in saved_sets(save_path)] == ["glossary.pdf"]
+    assert "sample.pdf" not in visible(hc.get("/"))
+    assert "sample.pdf" not in visible(make_client(save_path).get("/"))
+
+
+def test_R11_deleting_the_current_set_makes_the_newest_current_and_ends_its_quiz(hc, save_path):
+    upload_as(hc, "many.pdf", "old.pdf")
+    upload(hc, "glossary.pdf")
+    upload(hc, "sample.pdf")
+    start_quiz(hc)
+    hc.post(f"/sets/{set_id(save_path, 'sample.pdf')}/delete")
+    assert "Inflation" in visible(hc.get("/cards"))
+    assert "How many questions?" in visible(hc.get("/quiz"))
+
+
+def test_R11_deleting_the_last_set_leaves_no_cards(hc, save_path):
+    upload(hc, "sample.pdf")
+    hc.post(f"/sets/{set_id(save_path, 'sample.pdf')}/delete")
+    assert saved_sets(save_path) == []
+    assert hc.get("/cards").headers["Location"].endswith("/")
+    assert hc.get("/quiz").headers["Location"].endswith("/")
+    assert "Your card sets" not in visible(hc.get("/"))
+
+
+def test_R11_deleting_an_unknown_set_changes_nothing(hc, save_path):
+    upload(hc, "sample.pdf")
+    before = save_path.read_bytes()
+    assert hc.get("/sets/nope/delete").headers["Location"].endswith("/")
+    assert hc.post("/sets/nope/delete").headers["Location"].endswith("/")
+    assert save_path.read_bytes() == before
+
+
+def test_R11_only_the_last_ten_sets_are_kept(hc, save_path):
+    for n in range(1, 12):
+        upload_as(hc, "sample.pdf", f"unit{n}.pdf")
+    names = [s["filename"] for s in saved_sets(save_path)]
+    assert names == [f"unit{n}.pdf" for n in range(11, 1, -1)]
+    assert len(history_rows(hc)) == 10
+
+
+def test_R11_same_file_name_updates_the_set_and_moves_it_to_the_top(hc, save_path):
+    upload_as(hc, "sample.pdf", "unit.pdf")
+    old_id = set_id(save_path, "unit.pdf")
+    upload(hc, "many.pdf")
+    upload_as(hc, "glossary.pdf", "unit.pdf")
+    sets = saved_sets(save_path)
+    assert [s["filename"] for s in sets] == ["unit.pdf", "many.pdf"]
+    assert sets[0]["id"] == old_id
+    assert sets[0]["uploaded"] == "2026-11-03T09:00:00"
+    assert [c["term"] for c in sets[0]["cards"]] == GLOSSARY_TERMS
+    rows = history_rows(hc)
+    assert len(rows) == 2 and "Nov 3, 2026" in rows[0] and "3 cards" in rows[0]
+
+
+def test_R11_same_file_name_ends_a_quiz_on_that_set_in_another_browser(history_app, save_path):
+    first, second = history_app.test_client(), history_app.test_client()
+    upload_as(first, "sample.pdf", "unit.pdf")
+    second.post(f"/sets/{set_id(save_path, 'unit.pdf')}/study")
+    start_quiz(second)
+    upload_as(first, "glossary.pdf", "unit.pdf")
+    assert "How many questions?" in visible(second.get("/quiz"))
+    assert "Inflation" in visible(second.get("/cards"))

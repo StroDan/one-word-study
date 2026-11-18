@@ -40,7 +40,7 @@ def create_app(save_path: str | os.PathLike | None = None) -> Flask:
             "version": 0}
 
     # Per-browser state kept in memory:
-    # {session id: {"version", "quiz", "index", "score", "feedback", "pending"}}
+    # {session id: {"version", "quiz", "index", "score", "feedback", "missed", "practice", "pending"}}
     store: dict[str, dict] = {}
 
     def session_state() -> dict:
@@ -58,7 +58,11 @@ def create_app(save_path: str | os.PathLike | None = None) -> Flask:
         return session_state()
 
     def new_quiz(data: dict, count: int | None) -> None:
-        data.update(quiz=build_quiz(deck["cards"], count), index=0, score=0, feedback=None)
+        start_round(data, build_quiz(deck["cards"], count), practice=False)
+
+    def start_round(data: dict, questions: list, practice: bool) -> None:
+        # "missed" collects the cards answered wrong in this round (R8).
+        data.update(quiz=questions, index=0, score=0, feedback=None, missed=[], practice=practice)
 
     def upload_page(message: str):
         return render_template("index.html", message=message, deck=deck)
@@ -147,6 +151,8 @@ def create_app(save_path: str | os.PathLike | None = None) -> Flask:
             card = data["quiz"][data["index"]]
             correct = check_answer(request.form.get("answer", ""), card.term)
             data["score"] += correct
+            if not correct:
+                data["missed"].append(card)
             data["feedback"] = {"correct": correct, "answer": request.form.get("answer", "")}
         return render_quiz(data)
 
@@ -159,6 +165,25 @@ def create_app(save_path: str | os.PathLike | None = None) -> Flask:
             data["index"] += 1
             data["feedback"] = None
         return redirect(url_for("quiz"))
+
+    @app.post("/quiz/practice")
+    def practice():
+        """R8: a new round with only the cards missed in the round just finished."""
+        data = state()
+        if data is None:
+            return redirect(url_for("index"))
+        quiz = data["quiz"]
+        if quiz is not None and data["index"] >= len(quiz) and data["missed"]:
+            start_round(data, build_quiz(data["missed"]), practice=True)
+        return redirect(url_for("quiz"))
+
+    @app.post("/quiz/stop")
+    def stop():
+        """R8: stop practicing; the next visit to /quiz asks for a new quiz length."""
+        data = state()
+        if data is not None:
+            data["quiz"] = None
+        return redirect(url_for("cards"))
 
     @app.post("/quiz/restart")
     def restart():
@@ -179,6 +204,8 @@ def create_app(save_path: str | os.PathLike | None = None) -> Flask:
             total=total,
             score=data["score"],
             feedback=data["feedback"],
+            missed=len(data["missed"]),
+            practice=data["practice"],
         )
 
     return app

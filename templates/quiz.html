@@ -18,6 +18,10 @@
     .feedback.wrong { background: var(--bad-soft); border: 1px solid color-mix(in srgb, var(--bad) 35%, transparent); }
     .feedback .big { font-size: 18px; }
     .next { display: flex; justify-content: flex-end; }
+    .tag {
+      display: inline-block; font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+      background: var(--accent-soft); color: var(--accent); padding: 2px 10px; border-radius: 999px; margin-right: 6px;
+    }
 
     .result { text-align: center; }
     .ring {
@@ -38,22 +42,31 @@
 {% if done %}
   {% set pct = (100 * score / total)|round|int if total else 0 %}
   <div class="panel result">
-    <span class="eyebrow">Quiz complete</span>
+    <span class="eyebrow">{{ "Practice round complete" if practice else "Quiz complete" }}</span>
     <div class="ring" style="--pct: {{ pct }}"><div class="hole">{{ pct }}%</div></div>
     <p class="score">{{ score }} / {{ total }} correct</p>
     <p class="muted">
-      {% if pct == 100 %}Perfect, you know every term.
-      {% elif pct >= 70 %}Nice work. Review the ones you missed and try again.
-      {% else %}Keep going. Flip through the cards, then take the quiz again.{% endif %}
+      {% if practice and not missed %}You got every missed card right.
+      {% elif practice %}Almost there. Practice the ones still missed, or stop for now.
+      {% elif pct == 100 %}Perfect, you know every term.
+      {% elif pct >= 70 %}Nice work. Practice the ones you missed.
+      {% else %}Keep going. Practice the ones you missed, or flip through the cards.{% endif %}
     </p>
     <div class="actions">
-      <form action="/quiz/restart" method="post"><button type="submit">New quiz</button></form>
-      <a class="btn secondary" href="/cards">Review cards</a>
+      {% if missed %}
+        <form action="/quiz/practice" method="post"><button type="submit" autofocus>Practice the {{ missed }} missed card{{ "" if missed == 1 else "s" }} &rarr;</button></form>
+      {% endif %}
+      {% if practice and missed %}
+        <form action="/quiz/stop" method="post"><button type="submit" class="secondary">Stop practicing</button></form>
+      {% else %}
+        <form action="/quiz/restart" method="post"><button type="submit" class="{{ 'secondary' if missed }}">New quiz</button></form>
+        <a class="btn secondary" href="/cards">Review cards</a>
+      {% endif %}
     </div>
   </div>
 {% else %}
   <div class="progress-row">
-    <span>Question {{ number }} of {{ total }}</span>
+    <span>{% if practice %}<span class="tag">Practice round</span> {% endif %}Question {{ number }} of {{ total }}</span>
     <span class="muted">Score {{ score }}</span>
   </div>
   <div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="{{ total }}"

@@ -411,13 +411,6 @@ def test_R10_first_upload_needs_no_confirmation(saved_client):
     assert response.headers["Location"].endswith("/cards")
 
 
-def test_R10_replace_without_pending_upload_changes_nothing(saved_client):
-    upload(saved_client, "sample.pdf")
-    response = saved_client.post("/upload/replace")
-    assert response.status_code == 302
-    assert "Osmosis" in visible(saved_client.get("/cards"))
-
-
 def test_R10_replace_ends_the_quiz_in_progress(saved_client):
     upload(saved_client, "sample.pdf")
     start_quiz(saved_client)

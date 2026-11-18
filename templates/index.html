@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% macro count(n) %}{{ n }} card{{ "" if n == 1 else "s" }}{% endmacro %}
 {% block styles %}
     .hero { text-align: center; margin: 8px auto 28px; max-width: 640px; }
     .hero p { font-size: 18px; }
@@ -31,7 +32,29 @@
     .step p { margin: 0; font-size: 14px; }
     .saved { margin-bottom: 20px; border-color: color-mix(in srgb, var(--accent) 30%, transparent); }
     .saved p:first-child { font-weight: 600; }
-    .saved .hint { font-size: 13px; margin: 12px 0 0; }
+
+    /* R11: card history */
+    .history { margin-top: 20px; }
+    .history h2 { font-size: 18px; letter-spacing: -.01em; margin: 0 0 4px; }
+    .history > p { font-size: 14px; }
+    .sets { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 8px; }
+    .set {
+      display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+      padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2);
+    }
+    .set.current { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 30%, transparent); }
+    .set .info { margin-right: auto; min-width: 0; }
+    .set .file { font-weight: 600; overflow-wrap: anywhere; }
+    .set .meta { font-size: 14px; }
+    .set .tag {
+      display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+      background: var(--surface); color: var(--accent); padding: 1px 8px; border-radius: 999px; margin-left: 6px;
+      vertical-align: 2px;
+    }
+    .set .actions { display: flex; gap: 8px; align-items: center; margin: 0; }
+    .set form { margin: 0; }
+    .set button, .set .btn { padding: 7px 14px; font-size: 14px; }
+    .set .delete { color: var(--bad); }
 {% endblock %}
 {% block content %}
 <section class="hero">
@@ -42,15 +65,13 @@
 </section>
 
 <div class="narrow">
-  {% if deck and deck.cards %}
-  {% set n = deck.cards|length %}
+  {% if current %}
   <div class="saved panel">
-    <p>You have {{ n }} saved card{{ "" if n == 1 else "s" }} from {{ deck.filename }}.</p>
+    <p>You're studying {{ count(current.cards|length) }} from {{ current.filename }}.</p>
     <div class="row">
       <a class="btn" href="/quiz">Start a quiz &rarr;</a>
       <a class="btn secondary" href="/cards">See cards</a>
     </div>
-    <p class="muted hint">Uploading a new PDF asks before replacing them.</p>
   </div>
   {% endif %}
   {% if message %}<p class="message" role="alert">{{ message }}</p>{% endif %}
@@ -64,6 +85,30 @@
     </label>
     <div class="actions"><button type="submit">Make cards &rarr;</button></div>
   </form>
+
+  {% if sets %}
+  <section class="history panel" aria-labelledby="history-title">
+    <h2 id="history-title">Your card sets</h2>
+    <p class="muted">Newest first. The last 10 uploads are kept; uploading a PDF with the same name updates its set.</p>
+    <ul class="sets">
+      {% for s in sets %}
+      {% set is_current = current and s.id == current.id %}
+      <li class="set{{ ' current' if is_current }}">
+        <div class="info">
+          <div class="file">{{ s.filename }}{% if is_current %}<span class="tag">Studying now</span>{% endif %}</div>
+          <div class="meta muted">{{ s.uploaded|upload_date }} &middot; {{ count(s.cards|length) }}</div>
+        </div>
+        <div class="actions">
+          <form action="/sets/{{ s.id }}/study" method="post">
+            <button type="submit" class="{{ 'secondary' if is_current }}">Study</button>
+          </form>
+          <a class="btn secondary delete" href="/sets/{{ s.id }}/delete">Delete</a>
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
 
   <div class="steps">
     <div class="step"><div class="num">1</div><p><strong>Upload</strong> your unit's PDF.</p></div>

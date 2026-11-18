@@ -3,19 +3,25 @@ from __future__ import annotations
 
 import os
 import uuid
+from datetime import datetime
 from pathlib import Path
+from typing import Callable
 
 from flask import Flask, redirect, render_template, request, session, url_for
 
 from flashcards import (
     QUIZ_LENGTHS,
+    CardSet,
     PdfReadError,
+    add_set,
     build_quiz,
     cards_from_pdf,
     check_answer,
-    load_cards,
+    find_set,
+    load_sets,
     quiz_length_choices,
-    save_cards,
+    remove_set,
+    save_sets,
 )
 
 MAX_UPLOAD_MB = 50
@@ -26,123 +32,146 @@ TOO_LARGE_MESSAGE = f"This PDF is too large (limit is {MAX_UPLOAD_MB} MB)."
 DEFAULT_SAVE_PATH = Path.home() / ".one-word-study" / "cards.json"
 
 
-def create_app(save_path: str | os.PathLike | None = None) -> Flask:
+def upload_date(when: datetime) -> str:
+    """R11: the date shown in the history list, like "Nov 17, 2026"."""
+    return f"{when:%b} {when.day}, {when.year}"
+
+
+def create_app(save_path: str | os.PathLike | None = None,
+               clock: Callable[[], datetime] = datetime.now) -> Flask:
+    """save_path and clock can be set by tests (a temporary file and a fixed time)."""
     app = Flask(__name__)
     app.secret_key = os.urandom(32)  # local only; sessions reset when the server restarts
     app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_MB * 1024 * 1024
+    app.jinja_env.filters["upload_date"] = upload_date
     save_path = Path(save_path) if save_path is not None else DEFAULT_SAVE_PATH
 
-    # R10: the saved cards, shared by every browser tab. "version" goes up on each
-    # replace, so a quiz built from older cards is dropped.
-    loaded = load_cards(save_path)
-    deck = {"filename": loaded[0] if loaded else None,
-            "cards": loaded[1] if loaded else [],
-            "version": 0}
+    # R10/R11: the saved card sets, newest first, shared by every browser tab.
+    library = {"sets": load_sets(save_path)}
 
     # Per-browser state kept in memory:
-    # {session id: {"version", "quiz", "index", "score", "feedback", "missed", "practice", "pending"}}
+    # {session id: {"set_id", "quiz_set", "quiz", "index", "score", "feedback", "missed", "practice"}}
+    # "set_id" is the browser's current set (R11); "quiz_set" is the CardSet the quiz was
+    # built from. A same-name upload makes a new CardSet object, so `is not` spots it.
     store: dict[str, dict] = {}
 
     def session_state() -> dict:
         sid = session.setdefault("sid", uuid.uuid4().hex)
-        data = store.setdefault(sid, {"version": None, "quiz": None, "pending": None})
-        if data["version"] != deck["version"]:
-            data.update(version=deck["version"], quiz=None)
-        return data
+        return store.setdefault(sid, {"set_id": None, "quiz_set": None, "quiz": None})
 
-    def state() -> dict | None:
-        """This browser's quiz state, or None when there are no cards yet.
-        Its "quiz" is None until the student picks a length (R9)."""
-        if not deck["cards"]:
-            return None
-        return session_state()
+    def current_set(data: dict) -> CardSet | None:
+        """R11: the browser's current set, or the newest one if it has none (or it was
+        deleted or dropped). Ends the quiz if the set or its cards changed."""
+        sets = library["sets"]
+        current = find_set(sets, data["set_id"]) or (sets[0] if sets else None)
+        data["set_id"] = current.id if current else None
+        if data["quiz_set"] is not current:
+            data.update(quiz_set=current, quiz=None)
+        return current
 
-    def new_quiz(data: dict, count: int | None) -> None:
-        start_round(data, build_quiz(deck["cards"], count), practice=False)
+    def state() -> tuple[dict, CardSet] | tuple[None, None]:
+        """This browser's quiz state and current set, or (None, None) when there are no
+        sets. Its "quiz" is None until the student picks a length (R9)."""
+        data = session_state()
+        current = current_set(data)
+        return (data, current) if current else (None, None)
+
+    def new_quiz(data: dict, current: CardSet, count: int | None) -> None:
+        start_round(data, build_quiz(current.cards, count), practice=False)
 
     def start_round(data: dict, questions: list, practice: bool) -> None:
         # "missed" collects the cards answered wrong in this round (R8).
         data.update(quiz=questions, index=0, score=0, feedback=None, missed=[], practice=practice)
 
-    def upload_page(message: str):
-        return render_template("index.html", message=message, deck=deck)
+    def home_page(message: str | None = None):
+        return render_template("index.html", message=message, sets=library["sets"],
+                               current=current_set(session_state()))
+
+    def change_sets(sets: list[CardSet]) -> None:
+        save_sets(save_path, sets)  # first, so a failed write changes nothing in memory
+        library["sets"] = sets
 
     @app.get("/")
     def index():
-        return render_template("index.html", deck=deck)
+        return home_page()
 
     @app.post("/upload")
     def upload():
-        # R10: read the new PDF first; the saved cards stay unless it is usable.
+        # R10: read the new PDF first; nothing is saved unless it is usable.
         file = request.files.get("pdf")
         if file is None or not file.filename:
-            return upload_page(NO_FILE_MESSAGE), 400
+            return home_page(NO_FILE_MESSAGE), 400
         try:
             cards, message = cards_from_pdf(file.stream)
         except PdfReadError:
-            return upload_page(BAD_PDF_MESSAGE), 400
+            return home_page(BAD_PDF_MESSAGE), 400
         if message:
-            return upload_page(message)
-        pending = {"filename": file.filename, "cards": cards}
-        if not deck["cards"]:
-            replace_deck(pending)
-            return redirect(url_for("cards"))
-        session_state()["pending"] = pending
-        return render_template("confirm.html", old=deck, new=pending)
-
-    @app.post("/upload/replace")
-    def replace():
-        data = session_state()
-        if data["pending"] is not None:
-            replace_deck(data["pending"])
+            return home_page(message)
+        # R11: added on top (or replacing the set with the same file name); it becomes
+        # this browser's current set.
+        change_sets(add_set(library["sets"], file.filename, cards, clock()))
+        session_state()["set_id"] = library["sets"][0].id
         return redirect(url_for("cards"))
 
-    @app.post("/upload/cancel")
-    def cancel():
-        session_state()["pending"] = None
+    @app.post("/sets/<set_id>/study")
+    def study(set_id: str):
+        """R11: pick a set from the history to study it again."""
+        if find_set(library["sets"], set_id) is None:
+            return redirect(url_for("index"))
+        session_state()["set_id"] = set_id
         return redirect(url_for("cards"))
 
-    def replace_deck(new: dict) -> None:
-        save_cards(save_path, new["filename"], new["cards"])
-        deck.update(filename=new["filename"], cards=new["cards"], version=deck["version"] + 1)
-        session_state()["pending"] = None
+    @app.get("/sets/<set_id>/delete")
+    def confirm_delete(set_id: str):
+        """R11: ask before deleting."""
+        card_set = find_set(library["sets"], set_id)
+        if card_set is None:
+            return redirect(url_for("index"))
+        return render_template("delete.html", card_set=card_set)
+
+    @app.post("/sets/<set_id>/delete")
+    def delete(set_id: str):
+        if find_set(library["sets"], set_id) is not None:
+            change_sets(remove_set(library["sets"], set_id))
+        return redirect(url_for("index"))
 
     @app.errorhandler(413)
     def too_large(_error):
-        return upload_page(TOO_LARGE_MESSAGE), 413
+        return home_page(TOO_LARGE_MESSAGE), 413
 
     @app.get("/cards")
     def cards():
-        if not deck["cards"]:
+        _, current = state()
+        if current is None:
             return redirect(url_for("index"))
-        return render_template("cards.html", cards=deck["cards"], filename=deck["filename"])
+        return render_template("cards.html", cards=current.cards, filename=current.filename)
 
     @app.get("/quiz")
     def quiz():
-        data = state()
+        data, current = state()
         if data is None:
             return redirect(url_for("index"))
         if data["quiz"] is None:
-            return render_template("choose.html", total=len(deck["cards"]),
-                                   choices=quiz_length_choices(len(deck["cards"])))
+            return render_template("choose.html", total=len(current.cards),
+                                   choices=quiz_length_choices(len(current.cards)))
         return render_quiz(data)
 
     @app.post("/quiz/start")
     def start():
-        data = state()
+        data, current = state()
         if data is None:
             return redirect(url_for("index"))
         length = request.form.get("length", "")
         if length == "all":
-            new_quiz(data, None)
+            new_quiz(data, current, None)
         elif length in {str(n) for n in QUIZ_LENGTHS}:
-            new_quiz(data, int(length))  # build_quiz asks all cards if there are fewer
+            new_quiz(data, current, int(length))  # build_quiz asks all cards if there are fewer
         # Any other value: the choice page is shown again.
         return redirect(url_for("quiz"))
 
     @app.post("/quiz")
     def answer():
-        data = state()
+        data, _ = state()
         if data is None:
             return redirect(url_for("index"))
         if data["quiz"] is None:
@@ -158,7 +187,7 @@ def create_app(save_path: str | os.PathLike | None = None) -> Flask:
 
     @app.post("/quiz/next")
     def next_question():
-        data = state()
+        data, _ = state()
         if data is None:
             return redirect(url_for("index"))
         if data["quiz"] is not None and data["feedback"] is not None:
@@ -169,7 +198,7 @@ def create_app(save_path: str | os.PathLike | None = None) -> Flask:
     @app.post("/quiz/practice")
     def practice():
         """R8: a new round with only the cards missed in the round just finished."""
-        data = state()
+        data, _ = state()
         if data is None:
             return redirect(url_for("index"))
         quiz = data["quiz"]
@@ -180,14 +209,14 @@ def create_app(save_path: str | os.PathLike | None = None) -> Flask:
     @app.post("/quiz/stop")
     def stop():
         """R8: stop practicing; the next visit to /quiz asks for a new quiz length."""
-        data = state()
+        data, _ = state()
         if data is not None:
             data["quiz"] = None
         return redirect(url_for("cards"))
 
     @app.post("/quiz/restart")
     def restart():
-        data = state()
+        data, _ = state()
         if data is None:
             return redirect(url_for("index"))
         data["quiz"] = None  # R9: a new quiz starts with the length choice

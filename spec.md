@@ -1,6 +1,6 @@
 # One Word Study — Specification
 
-Source of truth: `problem.md`. This file turns requirements R1–R10 into
+Source of truth: `problem.md`. This file turns requirements R1–R11 into
 precise, testable behavior. Decisions marked *(clarified)* were confirmed
 with the project owner before coding.
 
@@ -24,16 +24,16 @@ is a thin web layer over it.
   `Could not read this file as a PDF.`
 - Uploads up to 50 MB are accepted. Bigger files get the response:
   `This PDF is too large (limit is 50 MB).`
-- *(changed with R10)* A new upload does not clear the current cards by
-  itself. A failed upload keeps them, and a good one replaces them only
-  after the student confirms (see R10).
+- *(changed with R10)* A failed upload changes nothing. A good one is
+  added to the saved card sets without asking and becomes the current set
+  (see R10 and R11).
 
 ## R2 — Flash cards
 
 - Each card has a `term` (front) and a `definition` (back).
 - After a successful upload, the student is sent to `/cards`, which lists
-  every card with its term and definition, in the order they appear in
-  the PDF. Clicking a card flips it: the front shows the term, the back
+  every card of the current set (R11) with its term and definition, in the
+  order they appear in the PDF. Clicking a card flips it: the front shows the term, the back
   shows the definition. The page also shows the card count.
 
 ## R3 — Quiz from the cards
@@ -155,37 +155,78 @@ project does not use.
 
 ## R10 — Save cards between visits
 
-- The current cards and the PDF's filename are saved as JSON at
+*(changed with R10: uploads are added as new sets; the replace warning
+and its confirm page are gone.)*
+
+- Every uploaded PDF's cards are saved as JSON at
   `~/.one-word-study/cards.json` (outside the repository).
-  `create_app(save_path=...)` can point it elsewhere; tests always use a
-  temporary path.
-- File format: `{"filename": "<name>.pdf", "cards": [{"term": "...",
-  "definition": "..."}, ...]}`. It is written to a temporary file in the
-  same folder and then renamed, so a crash never leaves half a file.
+  `create_app(save_path=..., clock=...)` can point it elsewhere and fix
+  the time; tests always use a temporary path and a fixed clock.
+- File format, newest set first, at most 10 sets:
+
+  ```json
+  {"sets": [{"id": "<32 hex chars>", "filename": "<name>.pdf",
+             "uploaded": "2026-11-17T21:50:00",
+             "cards": [{"term": "...", "definition": "..."}]}]}
+  ```
+
+  `uploaded` is the local time of the upload, to the second. The file is
+  written to a temporary file in the same folder and then renamed, so a
+  crash never leaves half a file.
+- *(clarified)* The old one-set format `{"filename": ..., "cards": [...]}`
+  is still read, as a single set. Its upload date is the save file's
+  last-modified time. The file is rewritten in the new format the next
+  time a set is added or deleted.
 - When the app starts, it loads that file. If the file is missing, is not
-  valid JSON, or has the wrong shape, the app starts with no cards.
-- When saved cards exist, the home page shows `You have N saved cards
-  from A.` with links to the cards and the quiz.
+  valid JSON, or has the wrong shape, the app starts with no sets. A set
+  with a wrong shape or no cards is skipped; the others are kept.
 - Upload flow:
-  1. The new PDF is read first. The current cards are not touched yet.
+  1. The new PDF is read first. The saved sets are not touched yet.
   2. If it can't be used (no file, not a PDF, too large, no text, no
-     terms), the page shows why (R1/R6 messages) and the current cards
-     stay.
-  3. If it has cards and there are no saved cards, they are saved and the
-     student goes to `/cards`.
-  4. If it has cards and saved cards exist, the page asks
-     `Replace N cards from A with M cards from B?` with `Replace` and
-     `Cancel` buttons. The new cards wait in server memory for that
-     browser. `Replace` saves them, ends any quiz in progress and goes to
-     `/cards`. `Cancel` drops them and goes to `/cards` with the old cards.
-- Quiz progress is not saved to disk; only the cards are.
+     terms), the page shows why (R1/R6 messages). Nothing is saved, the
+     saved sets and the current set stay, and a quiz in progress goes on.
+  3. If it has cards, it is saved as a set (R11 says where it goes in the
+     list) without asking, becomes the current set for this browser, and
+     the student goes to `/cards`. Any quiz in progress ends.
+- Quiz progress is not saved to disk; only the sets are.
+
+## R11 — Card history
+
+- The home page shows `Your card sets`: one row per saved set, newest
+  first, with its file name, upload date (`Nov 17, 2026`) and number of
+  cards (`5 cards`, `1 card`). The current set's row is marked
+  `Studying now`. With no saved sets, the list is not shown.
+- Above the list, the home page shows
+  `You're studying N cards from A.` with links to the cards and the quiz.
+- **Current set**: each browser has one current set, used by `/cards` and
+  `/quiz`. It is the set the browser last uploaded or picked. If it has
+  none yet, or its set was deleted or dropped, it is the newest saved set.
+  It is kept in server memory, so after a restart it is the newest set.
+- **Pick**: each row has a `Study` button that posts to
+  `/sets/<id>/study`. That set becomes this browser's current set and the
+  student goes to `/cards`. Picking a different set ends any quiz in
+  progress; picking the current one keeps it. The list order does not
+  change. An unknown id goes back to `/` and changes nothing.
+- **Delete**: each row has a `Delete` link to `/sets/<id>/delete`, which
+  asks `Delete A (N cards)?` with a `Delete` button (posts to the same
+  URL) and a `Cancel` link back to `/`. Nothing is deleted until the
+  student presses `Delete`. Then the set is removed from the file and the
+  student goes to `/`. An unknown id goes back to `/` and changes nothing.
+  If it was the current set, the newest remaining set becomes current
+  (and its quiz, if any, ends).
+- **At most 10**: adding an 11th set removes the oldest one.
+- **Same file name**: if the uploaded PDF's file name is exactly the same
+  as a saved set's (case matters), that set's cards are replaced, its
+  upload date is set to now, and it moves to the top. It keeps its id. No
+  second copy is made, and no older set is dropped. A quiz in progress on
+  that set (in any browser) ends, since its cards changed.
 
 ## Non-functional
 
 - Python 3.12, Flask, pypdf, pytest. No API keys, logins, or paid
   services.
 - Runs locally with one command (`./run.sh`) on `http://127.0.0.1:5050`.
-- *(changed with R10)* The cards are saved to one JSON file on this
-  computer (R10), shared by every browser tab. Quiz progress and a
-  pending upload are kept in server memory per browser session and are
-  lost when the server stops.
+- *(changed with R10/R11)* The card sets are saved to one JSON file on
+  this computer (R10), shared by every browser tab. Each browser's current
+  set and quiz progress are kept in server memory and are lost when the
+  server stops.

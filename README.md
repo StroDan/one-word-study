@@ -52,6 +52,14 @@ Requires Python 3.12 at `/opt/homebrew/bin/python3.12`.
 Then open http://127.0.0.1:5050. The first run creates `.venv` and installs
 the dependencies.
 
+### Try it with the sample PDF
+
+`examples/unit_03_git_testing_ai.pdf` is a two-page vocabulary sheet (Git,
+testing, and AI assistants) written in both card patterns, so it makes 21
+clean cards. Upload it, flip a few cards, take a 10-question quiz, miss a
+few on purpose to see the practice round, then check the history list on
+the home page.
+
 ## Run the tests
 
 ```sh

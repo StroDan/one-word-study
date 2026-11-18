@@ -12,15 +12,26 @@ instead of trying to memorize everything.
    `2:30` is ignored), the term starts with a capital letter, has at most 4
    words and doesn't end in a number, and question lines are skipped.
    A definition that wraps onto following lines starting with a small letter
-   is joined back together.
-3. A quiz shows each definition, one at a time, and you type the term.
+   or an opening parenthesis `(` is joined back together.
+3. Before a quiz you choose how many questions: 10, 20, or all cards (choices
+   bigger than your number of cards are hidden). Cards are picked at random,
+   never twice in one quiz.
+4. The quiz shows each definition, one at a time, and you type the term.
    Capitals and extra spaces don't matter. If you're wrong, it shows the
    correct term so you know what to review. You get a score at the end.
-4. If the PDF has no text (for example, a scanned PDF), it says
+5. If you missed any, you can practice just those cards. Repeat until you get
+   them all, or stop whenever you like.
+6. Your cards are saved, so next time you can go straight to the quiz. A new
+   upload asks before replacing them. If the new PDF can't be used, you see why
+   and your saved cards stay.
+7. If the PDF has no text (for example, a scanned PDF), it says
    "No text found in this PDF." If it has text but no lines match the
    pattern, it tells you which pattern to use.
 
 It runs only on your computer. No accounts, API keys, or internet services.
+The cards (and the PDF's name) are saved in `~/.one-word-study/cards.json`,
+outside this folder; delete that file to start fresh. Quiz progress is not
+saved.
 See `spec.md` for the exact rules.
 
 ## Run it
@@ -44,4 +55,5 @@ the dependencies.
 `/opt/homebrew/bin/python3.12 -m venv .venv && .venv/bin/pip install -r requirements.txt`.)
 
 Test names start with the requirement they check, e.g. `test_R4_...`.
+The tests save cards only to temporary folders, never to your real save file.
 The sample PDFs in `tests/fixtures/` are built by `tests/make_fixtures.py`.

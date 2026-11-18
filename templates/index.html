@@ -29,6 +29,9 @@
       background: var(--accent-soft); color: var(--accent); font-weight: 700; font-size: 14px; margin-bottom: 8px;
     }
     .step p { margin: 0; font-size: 14px; }
+    .saved { margin-bottom: 20px; border-color: color-mix(in srgb, var(--accent) 30%, transparent); }
+    .saved p:first-child { font-weight: 600; }
+    .saved .hint { font-size: 13px; margin: 12px 0 0; }
 {% endblock %}
 {% block content %}
 <section class="hero">
@@ -39,6 +42,17 @@
 </section>
 
 <div class="narrow">
+  {% if deck and deck.cards %}
+  {% set n = deck.cards|length %}
+  <div class="saved panel">
+    <p>You have {{ n }} saved card{{ "" if n == 1 else "s" }} from {{ deck.filename }}.</p>
+    <div class="row">
+      <a class="btn" href="/quiz">Start a quiz &rarr;</a>
+      <a class="btn secondary" href="/cards">See cards</a>
+    </div>
+    <p class="muted hint">Uploading a new PDF asks before replacing them.</p>
+  </div>
+  {% endif %}
   {% if message %}<p class="message" role="alert">{{ message }}</p>{% endif %}
   <form action="/upload" method="post" enctype="multipart/form-data" class="panel">
     <label class="drop" id="drop">

@@ -39,11 +39,17 @@ don't have a lot of time before the test to write flashcards.
   choose how many questions to answer: 10, 20, or all cards. The
   questions are picked at random from the cards, with no card asked
   twice in the same quiz.
-- R10 Save cards between visits. The cards from the last uploaded PDF
-  are saved on this computer, so when the student comes back later,
-  they can start a quiz without uploading the PDF again. Uploading a
-  new PDF replaces the saved cards with the new ones. Before that
-  happens, the app tells the student that the old cards will be
-  replaced and lets them cancel. If the new PDF can't be used (it
-  can't be read, has no text, or has no terms), the old cards stay and
-  the app tells the student why the upload failed.
+- R10 (changed: new uploads no longer replace the old cards, so the
+  replace warning is removed) Save cards between visits. Every
+  uploaded PDF's cards are saved on this computer. Uploading a new PDF
+  adds it as a new set without asking first, since nothing is lost. If
+  the new PDF can't be used, nothing new is saved, the saved sets stay
+  as they were, and the app tells the student why the upload failed.
+- R11 Card history. The home page shows a list of saved card sets,
+  newest first, with each set's file name, upload date, and number of
+  cards. The student can pick a set from the list to study it again.
+  The student can also delete a set, after confirming. Only the last 10
+  sets are kept; when an 11th is added, the oldest is removed. If the
+  student uploads a PDF with the same file name as a saved set, the
+  existing set is updated with the new cards and moves to the top of
+  the list instead of making a second copy.

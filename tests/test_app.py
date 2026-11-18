@@ -391,11 +391,12 @@ def test_R10_saved_cards_are_there_after_restart(save_path):
     assert "Question 1 of 5" in visible(start_quiz(later))
 
 
-def test_R10_home_page_mentions_saved_cards(saved_client):
-    assert "saved cards" not in visible(saved_client.get("/"))
+def test_R10_home_page_mentions_the_current_cards(saved_client):
+    # Changed with R11: there can be many saved sets, so the home page names the current one.
+    assert "You're studying" not in visible(saved_client.get("/"))
     upload(saved_client, "sample.pdf")
     text = visible(saved_client.get("/"))
-    assert "You have 5 saved cards from sample.pdf." in text
+    assert "You're studying 5 cards from sample.pdf." in text
 
 
 def test_R10_broken_save_file_starts_with_no_cards(save_path):

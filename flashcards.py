@@ -75,12 +75,12 @@ def parse_line(line: str) -> Card | None:
 
 
 def _continues_definition(line: str) -> bool:
-    """R7: a following line joins the definition if it starts lowercase and is not
-    blank, a bullet, or a card line of its own."""
+    """R7: a following line joins the definition if it starts lowercase or with "("
+    and is not blank, a bullet, or a card line of its own."""
     stripped = line.strip()
     return (
         bool(stripped)
-        and stripped[0].islower()
+        and (stripped[0].islower() or stripped[0] == "(")
         and not _BULLET.match(stripped)
         and parse_line(stripped) is None
     )

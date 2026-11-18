@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 from app import DEFAULT_SAVE_PATH, create_app
-from flashcards import NO_TERMS_MESSAGE, NO_TEXT_MESSAGE, load_cards
+from flashcards import NO_TERMS_MESSAGE, NO_TEXT_MESSAGE
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -411,11 +411,11 @@ def test_R10_first_upload_needs_no_confirmation(saved_client):
     assert response.headers["Location"].endswith("/cards")
 
 
-def test_R10_replace_ends_the_quiz_in_progress(saved_client):
+def test_R10_new_upload_ends_the_quiz_in_progress(saved_client):
+    # Changed with R10: the new set becomes current right away, with no Replace step.
     upload(saved_client, "sample.pdf")
     start_quiz(saved_client)
     upload(saved_client, "glossary.pdf")
-    saved_client.post("/upload/replace")
     assert "How many questions?" in visible(saved_client.get("/quiz"))
 
 

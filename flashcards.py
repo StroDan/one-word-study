@@ -1,5 +1,5 @@
 """Flash card logic: PDF text extraction, card parsing, quiz building, answer checking,
-and saving cards to a JSON file.
+and saving the card sets (the card history) to a JSON file.
 
 No Flask imports here, so everything can be tested without a browser.
 See spec.md for the exact rules.
@@ -11,7 +11,9 @@ import os
 import random
 import re
 import tempfile
+import uuid
 from dataclasses import dataclass
+from datetime import datetime
 from os import PathLike
 from pathlib import Path
 from typing import BinaryIO
@@ -31,6 +33,7 @@ _SEPARATOR = re.compile(r"\s*:\s+|\s+[-–—]\s+")
 _BULLET = re.compile(r"^[•◦▪*\-–—]\s+")
 MAX_TERM_WORDS = 4
 QUIZ_LENGTHS = (10, 20)  # R9: the number choices; "all" is always offered too
+MAX_SETS = 10  # R11: only the last 10 card sets are kept
 
 
 class PdfReadError(Exception):
@@ -41,6 +44,16 @@ class PdfReadError(Exception):
 class Card:
     term: str
     definition: str
+
+
+@dataclass(frozen=True)
+class CardSet:
+    """One uploaded PDF's cards (R10/R11). A same-name upload makes a new CardSet with
+    the same id, so a quiz can tell its cards changed by checking `is`."""
+    id: str
+    filename: str
+    uploaded: datetime
+    cards: list[Card]
 
 
 def _collapse(text: str) -> str:
@@ -187,3 +200,89 @@ def load_cards(path: str | PathLike) -> tuple[str, list[Card]] | None:
     if not all(isinstance(c.term, str) and isinstance(c.definition, str) for c in cards):
         return None
     return filename, cards
+
+
+# ---------- R10/R11: the saved card sets ----------
+
+def add_set(sets: list[CardSet], filename: str, cards: list[Card], now: datetime) -> list[CardSet]:
+    """Return a new list with the upload first (R11). A set with exactly the same file
+    name is replaced (same id, new cards and date) instead of copied; otherwise a new
+    set is added and only the newest MAX_SETS are kept."""
+    old = next((s for s in sets if s.filename == filename), None)
+    new = CardSet(old.id if old else uuid.uuid4().hex, filename, now, list(cards))
+    rest = [s for s in sets if s is not old]
+    return [new, *rest][:MAX_SETS]
+
+
+def remove_set(sets: list[CardSet], set_id: str) -> list[CardSet]:
+    """Return a new list without the set with this id (unchanged if there is none)."""
+    return [s for s in sets if s.id != set_id]
+
+
+def find_set(sets: list[CardSet], set_id: str | None) -> CardSet | None:
+    return next((s for s in sets if s.id == set_id), None)
+
+
+def _set_to_json(card_set: CardSet) -> dict:
+    return {
+        "id": card_set.id,
+        "filename": card_set.filename,
+        "uploaded": card_set.uploaded.isoformat(timespec="seconds"),
+        "cards": [{"term": c.term, "definition": c.definition} for c in card_set.cards],
+    }
+
+
+def _cards_from_json(raw) -> list[Card]:
+    """Cards from a JSON list; raises ValueError if the shape is wrong or there are none."""
+    if not isinstance(raw, list) or not raw:
+        raise ValueError("no cards")
+    cards = [Card(c["term"], c["definition"]) for c in raw]
+    if not all(isinstance(c.term, str) and isinstance(c.definition, str) for c in cards):
+        raise ValueError("card is not text")
+    return cards
+
+
+def _set_from_json(raw) -> CardSet | None:
+    """A set from the new format, or None if this one entry is broken."""
+    try:
+        if not all(isinstance(raw[k], str) for k in ("id", "filename", "uploaded")):
+            return None
+        return CardSet(raw["id"], raw["filename"], datetime.fromisoformat(raw["uploaded"]),
+                       _cards_from_json(raw["cards"]))
+    except (ValueError, KeyError, TypeError):
+        return None
+
+
+def save_sets(path: str | PathLike, sets: list[CardSet]) -> None:
+    """R10: save the sets, newest first, as JSON. Written to a temp file in the same
+    folder and then renamed, so a crash never leaves a half-written file."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    data = {"sets": [_set_to_json(s) for s in sets]}
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=".cards-", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            json.dump(data, fh, ensure_ascii=False, indent=2)
+        os.replace(tmp, path)
+    except BaseException:
+        Path(tmp).unlink(missing_ok=True)
+        raise
+
+
+def load_sets(path: str | PathLike) -> list[CardSet]:
+    """R10: the saved sets, newest first (at most MAX_SETS), or [] if there is no usable
+    file. Broken sets are skipped. The old one-set format {"filename", "cards"} loads as
+    a single set dated by the file's last change. Nothing is written here."""
+    path = Path(path)
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        if isinstance(data, dict) and isinstance(data.get("sets"), list):
+            sets = [s for s in map(_set_from_json, data["sets"]) if s is not None]
+            return sets[:MAX_SETS]
+        if isinstance(data, dict) and isinstance(data.get("filename"), str):
+            uploaded = datetime.fromtimestamp(path.stat().st_mtime).replace(microsecond=0)
+            return [CardSet(uuid.uuid4().hex, data["filename"], uploaded,
+                            _cards_from_json(data["cards"]))]
+    except (OSError, ValueError, KeyError, TypeError):
+        pass
+    return []

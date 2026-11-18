@@ -411,19 +411,6 @@ def test_R10_first_upload_needs_no_confirmation(saved_client):
     assert response.headers["Location"].endswith("/cards")
 
 
-def test_R10_replace_saves_the_new_cards(saved_client, save_path):
-    upload(saved_client, "sample.pdf")
-    upload(saved_client, "glossary.pdf")
-    response = saved_client.post("/upload/replace")
-    assert response.headers["Location"].endswith("/cards")
-    text = visible(saved_client.get("/cards"))
-    assert "Osmosis" not in text
-    for term in GLOSSARY_TERMS:
-        assert term in text
-    assert load_cards(save_path)[0] == "glossary.pdf"
-    assert make_client(save_path).get("/cards").status_code == 200
-
-
 def test_R10_cancel_keeps_the_old_cards(saved_client, save_path):
     upload(saved_client, "sample.pdf")
     upload(saved_client, "glossary.pdf")

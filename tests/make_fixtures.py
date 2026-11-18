@@ -91,6 +91,14 @@ GLOSSARY_LINES = [
     "Because every choice uses limited resources, something is given up.",
 ]
 
+# 25 cards, so the quiz length choice (R9) can offer 10, 20 and all.
+MANY_WORDS = [
+    "Alpha", "Bravo", "Charlie", "Delta", "Echo", "Foxtrot", "Golf", "Hotel", "India",
+    "Juliett", "Kilo", "Lima", "Mike", "November", "Oscar", "Papa", "Quebec", "Romeo",
+    "Sierra", "Tango", "Uniform", "Victor", "Whiskey", "Xray", "Yankee",
+]
+MANY_LINES = [f"{word}: Made-up meaning number {n}." for n, word in enumerate(MANY_WORDS, start=1)]
+
 NO_TERMS_LINES = [
     "Unit 4 Biology Review",
     "Cells are small and self-contained.",
@@ -104,6 +112,7 @@ def main() -> None:
     (FIXTURES / "no_terms.pdf").write_bytes(text_pdf(NO_TERMS_LINES))
     (FIXTURES / "slides.pdf").write_bytes(text_pdf(SLIDES_LINES))
     (FIXTURES / "glossary.pdf").write_bytes(text_pdf(GLOSSARY_LINES))
+    (FIXTURES / "many.pdf").write_bytes(text_pdf(MANY_LINES))
     blank = PdfWriter()
     blank.add_blank_page(width=612, height=792)  # stands in for a scanned page
     with open(FIXTURES / "scanned.pdf", "wb") as fh:

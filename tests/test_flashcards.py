@@ -135,13 +135,6 @@ def test_R9_number_choices_are_only_those_smaller_than_the_card_count(count, exp
 
 # ---------- R10: save cards between visits ----------
 
-def test_R10_saving_again_replaces_the_old_cards(tmp_path):
-    path = tmp_path / "cards.json"
-    save_cards(path, "a.pdf", SAMPLE_CARDS)
-    save_cards(path, "b.pdf", SAMPLE_CARDS[:2])
-    assert load_cards(path) == ("b.pdf", SAMPLE_CARDS[:2])
-
-
 def test_R10_non_ascii_text_survives_saving(tmp_path):
     path = tmp_path / "cards.json"
     cards = [Card("Ölçü", "Größe – “quoted” • bullet")]

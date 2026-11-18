@@ -76,8 +76,11 @@ def test_R1_successful_upload_redirects_to_cards(client):
 
 
 def test_R1_new_upload_replaces_old_cards(client):
+    # Changed with R10: a failed upload (like no_terms.pdf) now keeps the old cards,
+    # and a good one replaces them only after the student confirms.
     upload(client, "sample.pdf")
-    upload(client, "no_terms.pdf")
+    upload(client, "glossary.pdf")
+    client.post("/upload/replace")
     assert "Osmosis" not in page(client.get("/cards"))
 
 

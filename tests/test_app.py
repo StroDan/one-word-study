@@ -104,6 +104,7 @@ def test_R2_cards_page_without_upload_redirects_home(client):
 
 def test_R3_quiz_asks_one_question_per_card_then_scores(client):
     upload(client, "sample.pdf")
+    start_quiz(client, "all")  # R9: the student picks the length first
     seen = []
     for _ in SAMPLE_TERMS:
         definition = current_definition(client)
@@ -116,10 +117,13 @@ def test_R3_quiz_asks_one_question_per_card_then_scores(client):
 
 def test_R3_quiz_restart_starts_over(client):
     upload(client, "sample.pdf")
+    start_quiz(client, "all")
     client.post("/quiz", data={"answer": "x"})
     client.post("/quiz/next")
     client.post("/quiz/restart")
-    assert "Question 1 of 5" in page(client.get("/quiz"))
+    # R9: starting over asks for the length again before question 1.
+    assert "How many questions?" in page(client.get("/quiz"))
+    assert "Question 1 of 5" in page(start_quiz(client, "all"))
 
 
 def test_R3_quiz_without_upload_redirects_home(client):
@@ -131,6 +135,7 @@ def test_R3_quiz_without_upload_redirects_home(client):
 
 def test_R5_question_shows_definition_but_not_term(client):
     upload(client, "sample.pdf")
+    start_quiz(client, "all")  # R9
     text = page(client.get("/quiz"))
     definition = current_definition(client)
     assert definition in SAMPLE_TERMS.values()
@@ -140,6 +145,7 @@ def test_R5_question_shows_definition_but_not_term(client):
 
 def test_R5_correct_answer_ignoring_case_and_spaces(client):
     upload(client, "sample.pdf")
+    start_quiz(client, "all")  # R9
     term = DEFINITION_TO_TERM[current_definition(client)]
     text = page(client.post("/quiz", data={"answer": f"  {term.upper()}  "}))
     assert "Correct!" in text
@@ -148,6 +154,7 @@ def test_R5_correct_answer_ignoring_case_and_spaces(client):
 
 def test_R5_wrong_answer_shows_correct_term(client):
     upload(client, "sample.pdf")
+    start_quiz(client, "all")  # R9
     term = DEFINITION_TO_TERM[current_definition(client)]
     text = page(client.post("/quiz", data={"answer": "definitely wrong"}))
     visible = re.sub(r"<[^>]+>", "", text)
@@ -157,6 +164,7 @@ def test_R5_wrong_answer_shows_correct_term(client):
 
 def test_R5_wrong_answers_lower_the_score(client):
     upload(client, "sample.pdf")
+    start_quiz(client, "all")  # R9
     for _ in SAMPLE_TERMS:
         client.post("/quiz", data={"answer": "wrong"})
         client.post("/quiz/next")

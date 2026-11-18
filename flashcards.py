@@ -167,41 +167,6 @@ def check_answer(answer: str, term: str) -> bool:
     return bool(given) and given == normalize(term)
 
 
-def save_cards(path: str | PathLike, filename: str, cards: list[Card]) -> None:
-    """R10: save the cards and the PDF's filename as JSON. Written to a temp file in the
-    same folder and then renamed, so a crash never leaves a half-written file."""
-    path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    data = {
-        "filename": filename,
-        "cards": [{"term": c.term, "definition": c.definition} for c in cards],
-    }
-    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=".cards-", suffix=".tmp")
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as fh:
-            json.dump(data, fh, ensure_ascii=False, indent=2)
-        os.replace(tmp, path)
-    except BaseException:
-        Path(tmp).unlink(missing_ok=True)
-        raise
-
-
-def load_cards(path: str | PathLike) -> tuple[str, list[Card]] | None:
-    """R10: return (filename, cards) from a save file, or None if there is no usable
-    file (missing, not JSON, wrong shape, or no cards)."""
-    try:
-        data = json.loads(Path(path).read_text(encoding="utf-8"))
-        filename = data["filename"]
-        cards = [Card(c["term"], c["definition"]) for c in data["cards"]]
-    except (OSError, ValueError, KeyError, TypeError):
-        return None
-    if not isinstance(filename, str) or not cards:
-        return None
-    if not all(isinstance(c.term, str) and isinstance(c.definition, str) for c in cards):
-        return None
-    return filename, cards
-
-
 # ---------- R10/R11: the saved card sets ----------
 
 def add_set(sets: list[CardSet], filename: str, cards: list[Card], now: datetime) -> list[CardSet]:

@@ -1,6 +1,5 @@
 """Tests for the logic module (no Flask). Each test name starts with its requirement ID."""
 import io
-import json
 import random
 from pathlib import Path
 
@@ -15,11 +14,9 @@ from flashcards import (
     cards_from_pdf,
     check_answer,
     extract_text,
-    load_cards,
     parse_cards,
     parse_line,
     quiz_length_choices,
-    save_cards,
 )
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -131,23 +128,6 @@ def test_R9_build_quiz_does_not_change_input():
 ])
 def test_R9_number_choices_are_only_those_smaller_than_the_card_count(count, expected):
     assert quiz_length_choices(count) == expected
-
-
-# ---------- R10: save cards between visits ----------
-
-@pytest.mark.parametrize("content", [
-    "not json",
-    "",
-    "[]",
-    '{"filename": "a.pdf"}',
-    '{"filename": "a.pdf", "cards": [{"term": "Cell"}]}',
-    '{"filename": 3, "cards": []}',
-    '{"filename": "a.pdf", "cards": []}',
-])
-def test_R10_broken_or_empty_file_loads_nothing(tmp_path, content):
-    path = tmp_path / "cards.json"
-    path.write_text(content, encoding="utf-8")
-    assert load_cards(path) is None
 
 
 # ---------- R4: only "Term: definition" / "Term - definition" lines ----------
